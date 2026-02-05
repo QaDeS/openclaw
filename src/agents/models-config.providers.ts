@@ -10,6 +10,7 @@ import {
   buildCloudflareAiGatewayModelDefinition,
   resolveCloudflareAiGatewayBaseUrl,
 } from "./cloudflare-ai-gateway.js";
+import { resolveImplicitLocalGgufProvider } from "./local-gguf-models.js";
 import { resolveAwsSdkEnvVarName, resolveEnvApiKey } from "./model-auth.js";
 import {
   buildSyntheticModelDefinition,
@@ -405,6 +406,33 @@ export async function resolveImplicitProviders(params: {
   const authStore = ensureAuthProfileStore(params.agentDir, {
     allowKeychainPrompt: false,
   });
+
+  // Local GGUF provider
+  const localGgufProvider = await resolveImplicitLocalGgufProvider({
+    config: { ...params, models: { providers: params.providers ?? {} } } as any, // Temporary cast until caller passes full config
+  }).catch(() => null);
+
+  // NOTE: The caller (resolveOpenClawModelsJson) passes explicit providers.
+  // But resolveImplicitLocalGgufProvider needs the config to find the base URL.
+  // We need to check if the caller context has the config. 
+  // Looking at the signature: resolveImplicitProviders(params: { providers: ... })
+  // It seems we might need to change the signature or rely on the fact that 
+  // local-gguf is EXPLICITLY configured in the config object, so it might 
+  // already be passed in `providers`.
+  //
+  // Actually, `resolveImplicitProviders` is called to ADD implicit providers.
+  // If `local-gguf` is in the config, it will be in `providers` argument?
+  // No, `providers` arg comes from `config.models.providers`.
+  // So if it's there, we just need to hydrate the MODELS list.
+
+  if (params.providers?.["local-gguf"]) {
+    const implicit = await resolveImplicitLocalGgufProvider({
+      config: { models: { providers: params.providers } } as any
+    });
+    if (implicit) {
+      providers["local-gguf"] = implicit;
+    }
+  }
 
   const minimaxKey =
     resolveEnvApiKeyVarName("minimax") ??
