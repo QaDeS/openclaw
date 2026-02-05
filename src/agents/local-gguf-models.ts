@@ -65,11 +65,20 @@ export async function resolveImplicitLocalGgufProvider(params: {
     env?: NodeJS.ProcessEnv;
 }): Promise<ProviderConfig | null> {
     const providerConfig = params.config.models?.providers?.["local-gguf"];
-    if (!providerConfig || !providerConfig.baseUrl?.startsWith("file://")) {
+
+    // Check for MODEL_PATH env var if no config or if config uses it
+    let folderPath: string | undefined;
+
+    if (providerConfig?.baseUrl?.startsWith("file://")) {
+        folderPath = providerConfig.baseUrl.slice(7);
+    } else if (params.env?.MODEL_PATH) {
+        folderPath = params.env.MODEL_PATH;
+    }
+
+    if (!folderPath) {
         return null;
     }
 
-    const folderPath = providerConfig.baseUrl.slice(7); // Remove file://
     const models = await discoverLocalGgufModels(folderPath);
 
     if (models.length === 0) {
@@ -77,7 +86,7 @@ export async function resolveImplicitLocalGgufProvider(params: {
     }
 
     return {
-        baseUrl: providerConfig.baseUrl,
+        baseUrl: `file://${folderPath}`,
         api: "openai-completions",
         models,
     };

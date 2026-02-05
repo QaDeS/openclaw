@@ -1,5 +1,5 @@
 import type { RuntimeEnv } from "../../runtime.js";
-import { loadConfig, updateConfig } from "../../config/config.js";
+import { loadConfig, writeConfigFile } from "../../config/config.js";
 import { callGateway } from "../../gateway/call.js";
 
 export async function modelsGgufUnloadCommand(
@@ -36,7 +36,7 @@ export async function modelsGgufConfigCommand(
 ) {
     if (opts.limit === undefined) {
         const cfg = loadConfig();
-        const current = cfg.providers?.["local-gguf"]?.maxCachedModels ?? 5;
+        const current = cfg.models?.providers?.["local-gguf"]?.maxCachedModels ?? 5;
         runtime.log(`Current GGUF cache limit: ${current}`);
         return;
     }
@@ -46,22 +46,27 @@ export async function modelsGgufConfigCommand(
         throw new Error("Limit must be a positive number");
     }
 
-    await updateConfig((cfg) => {
-        if (!cfg.providers) {
-            cfg.providers = {};
-        }
-        if (!cfg.providers["local-gguf"]) {
-            cfg.providers["local-gguf"] = {};
-        }
-        // Type assertion or update type definition might be needed if maxCachedModels is not in schema yet
-        // Assuming schema allows arbitrary props or I need to update it.
-        (cfg.providers["local-gguf"] as any).maxCachedModels = limit;
+    const cfg = loadConfig();
+    if (!cfg.models) {
+        cfg.models = {};
+    }
+    if (!cfg.models.providers) {
+        cfg.models.providers = {};
+    }
+    if (!cfg.models.providers["local-gguf"]) {
+        cfg.models.providers["local-gguf"] = {
+            baseUrl: "",
+            models: [],
+        };
+    }
+    cfg.models.providers["local-gguf"].maxCachedModels = limit;
 
-        // Also, we might want to update the running instance if possible?
-        // But modifying config usually requires restart or HUP.
-        // However, GgufModelManager is configurable.
-        // If the gateway watches config, it might reload.
-    });
+    await writeConfigFile(cfg);
+
+    // Also, we might want to update the running instance if possible?
+    // But modifying config usually requires restart or HUP.
+    // However, GgufModelManager is configurable.
+    // If the gateway watches config, it might reload.
 
     runtime.log(`GGUF cache limit set to ${limit}. You may need to restart the agent/gateway for this to take full effect if not dynamically watched.`);
 }
