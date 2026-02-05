@@ -13,8 +13,8 @@ interface LoadedModel {
 
 const DEFAULT_MAX_CACHED_MODELS = 5;
 
-export class GgufModelManager {
-    private static instance: GgufModelManager;
+export class LmStudioModelManager {
+    private static instance: LmStudioModelManager;
     private loadedModels: Map<string, LoadedModel> = new Map();
     private llama: Llama | null = null;
     private nodeLlama: any = null;
@@ -22,11 +22,11 @@ export class GgufModelManager {
 
     private constructor() { }
 
-    static getInstance(): GgufModelManager {
-        if (!GgufModelManager.instance) {
-            GgufModelManager.instance = new GgufModelManager();
+    static getInstance(): LmStudioModelManager {
+        if (!LmStudioModelManager.instance) {
+            LmStudioModelManager.instance = new LmStudioModelManager();
         }
-        return GgufModelManager.instance;
+        return LmStudioModelManager.instance;
     }
 
     configure(params: { maxCachedModels?: number }) {
@@ -39,7 +39,7 @@ export class GgufModelManager {
     async getModel(modelPath: string): Promise<LlamaModel> {
         const existing = this.loadedModels.get(modelPath);
         if (existing) {
-            log.info(`[GgufModelManager] Reusing loaded model: ${modelPath}`);
+            log.info(`[LmStudioModelManager] Reusing loaded model: ${modelPath}`);
             existing.lastUsed = Date.now();
             return existing.model;
         }
@@ -47,7 +47,7 @@ export class GgufModelManager {
         await this.ensureLlama();
         await this.manageCache();
 
-        log.info(`[GgufModelManager] Loading model: ${modelPath}`);
+        log.info(`[LmStudioModelManager] Loading model: ${modelPath}`);
         try {
             const model = await this.llama.loadModel({
                 modelPath: modelPath,
@@ -61,7 +61,7 @@ export class GgufModelManager {
 
             return model;
         } catch (err) {
-            log.error(`[GgufModelManager] Failed to load model ${modelPath}:`, err);
+            log.error(`[LmStudioModelManager] Failed to load model ${modelPath}:`, err as any);
             throw err;
         }
     }
@@ -69,7 +69,7 @@ export class GgufModelManager {
     private async ensureLlama() {
         if (this.llama) return;
 
-        log.info("[GgufModelManager] Initializing node-llama-cpp runtime...");
+        log.info("[LmStudioModelManager] Initializing node-llama-cpp runtime...");
         this.nodeLlama = await import("node-llama-cpp");
         this.llama = await this.nodeLlama.getLlama();
     }
@@ -77,7 +77,7 @@ export class GgufModelManager {
     async unloadModel(modelPath: string) {
         const entry = this.loadedModels.get(modelPath);
         if (entry) {
-            log.info(`[GgufModelManager] Explicitly unloading model: ${modelPath}`);
+            log.info(`[LmStudioModelManager] Explicitly unloading model: ${modelPath}`);
             if (typeof entry.model.dispose === 'function') {
                 entry.model.dispose();
             }
@@ -86,7 +86,7 @@ export class GgufModelManager {
     }
 
     async clearCache() {
-        log.info("[GgufModelManager] Clearing all cached models");
+        log.info("[LmStudioModelManager] Clearing all cached models");
         for (const path of this.loadedModels.keys()) {
             await this.unloadModel(path);
         }

@@ -523,68 +523,66 @@ export async function runEmbeddedAttempt(
         params.streamParams,
       );
 
-      // Local GGUF Runtime Injection
-      // Local GGUF Runtime Injection
-      if (params.provider === "local-gguf") {
+      // LM Studio / GGUF Runtime Injection
+      if (params.provider === "lmstudio") {
         try {
           // Determine model path from config
-          const providerConfig = params.config?.models?.providers?.["local-gguf"];
-          if (!providerConfig?.baseUrl?.startsWith("file://")) {
-            throw new Error("Invalid local-gguf provider configuration: missing file:// baseUrl");
-          }
+          const providerConfig = params.config?.models?.providers?.["lmstudio"];
 
-          const basePath = providerConfig.baseUrl.slice(7);
-          const path = await import("node:path");
-          const modelPath = path.join(basePath, params.modelId);
+          // Only perform local loading if we have a file:// baseUrl
+          if (providerConfig?.baseUrl?.startsWith("file://")) {
+            const basePath = providerConfig.baseUrl.slice(7);
+            const path = await import("node:path");
+            const modelPath = path.join(basePath, params.modelId);
 
-          // Use Manager for caching
-          const { GgufModelManager } = await import("../../local-gguf-manager.js");
-          if (typeof providerConfig.maxCachedModels === 'number') {
-            GgufModelManager.getInstance().configure({ maxCachedModels: providerConfig.maxCachedModels });
-          }
-          const model = await GgufModelManager.getInstance().getModel(modelPath);
-
-          // Dynamic import for types/classes needed for session creation
-          const nodeLlama = await import("node-llama-cpp");
-          const { LlamaChatSession } = nodeLlama;
-
-          const context = await model.createContext();
-          const session = new LlamaChatSession({
-            contextSequence: context.getSequence(),
-          });
-
-          // Create adapter streamFn
-          activeSession.agent.streamFn = async function* (model: any, ctx: any, options: any) {
-            const lastMsg = ctx.messages[ctx.messages.length - 1];
-            const history = ctx.messages.slice(0, -1);
-
-            // Reset session history
-            session.setChatHistory(history.map((m: any) => ({
-              role: m.role,
-              content: typeof m.content === 'string' ? m.content : m.content.map((c: any) => c.text || '').join('')
-            })));
-
-            const systemPrompt = ctx.messages.find((m: any) => m.role === 'system')?.content;
-            if (typeof systemPrompt === 'string') {
-              // session.setSystemPrompt(systemPrompt); // If API supported
+            // Use Manager for caching
+            const { LmStudioModelManager } = await import("../../../lmstudio-manager.js");
+            if (typeof providerConfig.maxCachedModels === 'number') {
+              LmStudioModelManager.getInstance().configure({ maxCachedModels: providerConfig.maxCachedModels });
             }
+            const model = await LmStudioModelManager.getInstance().getModel(modelPath);
 
-            // Handle prompt text from message content array or string
-            const promptText = typeof lastMsg.content === 'string' ? lastMsg.content :
-              lastMsg.content.map((c: any) => c.text || '').join('');
+            // Dynamic import for types/classes needed for session creation
+            const nodeLlama = await import("node-llama-cpp");
+            const { LlamaChatSession } = nodeLlama;
 
-            const responsePromise = session.prompt(promptText, {
-              onToken: (tokens) => {
-                // Streaming hook placeholder
-              }
+            const context = await model.createContext();
+            const session = new LlamaChatSession({
+              contextSequence: context.getSequence(),
             });
 
-            const fullResponse = await responsePromise;
-            yield { type: "text-delta", text: fullResponse };
-          };
+            // Create adapter streamFn
+            activeSession.agent.streamFn = async function* (model: any, ctx: any, options: any) {
+              const lastMsg = ctx.messages[ctx.messages.length - 1];
+              const history = ctx.messages.slice(0, -1);
 
+              // Reset session history
+              session.setChatHistory(history.map((m: any) => ({
+                role: m.role,
+                content: typeof m.content === 'string' ? m.content : m.content.map((c: any) => c.text || '').join('')
+              })));
+
+              const systemPrompt = ctx.messages.find((m: any) => m.role === 'system')?.content;
+              if (typeof systemPrompt === 'string') {
+                // session.setSystemPrompt(systemPrompt); // If API supported
+              }
+
+              // Handle prompt text from message content array or string
+              const promptText = typeof lastMsg.content === 'string' ? lastMsg.content :
+                lastMsg.content.map((c: any) => c.text || '').join('');
+
+              const responsePromise = session.prompt(promptText, {
+                onToken: (tokens) => {
+                  // Streaming hook placeholder
+                }
+              });
+
+              const fullResponse = await responsePromise;
+              yield { type: "text-delta", text: fullResponse };
+            };
+          }
         } catch (error) {
-          log.error("Failed to initialize local-gguf provider", error);
+          log.error("Failed to initialize lmstudio provider local mode", error);
           throw error;
         }
       }

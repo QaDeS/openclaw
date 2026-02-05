@@ -26,7 +26,7 @@ export const modelsHandlers: GatewayRequestHandlers = {
       respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(err)));
     }
   },
-  "models.gguf.unload": async ({ params, respond }) => {
+  "models.lmstudio.unload": async ({ params, respond }) => {
     const modelPath = typeof params.modelPath === "string" ? params.modelPath : undefined;
     const all = params.all === true;
 
@@ -40,13 +40,13 @@ export const modelsHandlers: GatewayRequestHandlers = {
     }
 
     try {
-      const { GgufModelManager } = await import(
-        "../../agents/local-gguf-manager.js"
+      const { LmStudioModelManager } = await import(
+        "../../agents/lmstudio-manager.js"
       );
-      const manager = GgufModelManager.getInstance();
+      const manager = LmStudioModelManager.getInstance();
       if (all) {
         await manager.clearCache();
-        respond(true, { message: "All GGUF models unloaded" }, undefined);
+        respond(true, { message: "All local models unloaded" }, undefined);
       } else if (modelPath) {
         await manager.unloadModel(modelPath);
         respond(true, { message: `Model unloaded: ${modelPath}` }, undefined);

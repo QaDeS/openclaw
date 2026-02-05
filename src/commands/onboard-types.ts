@@ -35,6 +35,7 @@ export type AuthChoice =
   | "github-copilot"
   | "copilot-proxy"
   | "qwen-portal"
+  | "lmstudio"
   | "local-gguf"
   | "skip";
 export type GatewayAuthChoice = "token" | "password";

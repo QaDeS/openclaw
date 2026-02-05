@@ -1,9 +1,9 @@
 import { type OpenClawConfig, loadConfig } from "../config/config.js";
 import { resolveOpenClawAgentDir } from "./agent-paths.js";
 import { ensureOpenClawModelsJson } from "./models-config.js";
-import { resolveImplicitLocalGgufProvider } from "./local-gguf-models.js";
+import { resolveImplicitLmStudioProvider } from "./lmstudio.js";
 import type { ModelDiscoverySource, DiscoveredModel } from "./discovery-types.js";
-import { LocalGgufDiscoverySource } from "./local-gguf-discovery.js";
+import { LmStudioDiscoverySource } from "./lmstudio-discovery.js";
 
 export type ModelCatalogEntry = {
   id: string;
@@ -79,8 +79,8 @@ export async function loadModelCatalog(params?: {
             return entries as DiscoveredModel[];
           }
         },
-        // Local GGUF
-        new LocalGgufDiscoverySource(),
+        // LM Studio (Local / GGUF)
+        new LmStudioDiscoverySource(),
       ];
 
       for (const source of sources) {

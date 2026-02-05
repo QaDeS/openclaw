@@ -132,7 +132,7 @@ const AUTH_CHOICE_GROUP_DEFS: {
       value: "local",
       label: "Local",
       hint: "GGUF models",
-      choices: ["local-gguf"],
+      choices: ["lmstudio"],
     },
   ];
 
@@ -221,9 +221,9 @@ export function buildAuthChoiceOptions(params: {
   });
   options.push({ value: "minimax-api", label: "MiniMax M2.1" });
   options.push({
-    value: "local-gguf",
-    label: "Local GGUF Models",
-    hint: "Use local .gguf models from a folder",
+    value: "lmstudio",
+    label: "LM Studio",
+    hint: "Connect to local LM Studio server or scan GGUF models",
   });
   options.push({
     value: "minimax-api-lightning",

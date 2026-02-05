@@ -8,7 +8,7 @@ import { applyAuthChoiceCopilotProxy } from "./auth-choice.apply.copilot-proxy.j
 import { applyAuthChoiceGitHubCopilot } from "./auth-choice.apply.github-copilot.js";
 import { applyAuthChoiceGoogleAntigravity } from "./auth-choice.apply.google-antigravity.js";
 import { applyAuthChoiceGoogleGeminiCli } from "./auth-choice.apply.google-gemini-cli.js";
-import { applyAuthChoiceLocalGguf } from "./auth-choice.apply.local-gguf.js";
+import { applyAuthChoiceLmStudio } from "./auth-choice.apply.lmstudio.js";
 import { applyAuthChoiceMiniMax } from "./auth-choice.apply.minimax.js";
 import { applyAuthChoiceOAuth } from "./auth-choice.apply.oauth.js";
 import { applyAuthChoiceOpenAI } from "./auth-choice.apply.openai.js";
@@ -50,7 +50,7 @@ export async function applyAuthChoice(
     applyAuthChoiceGoogleGeminiCli,
     applyAuthChoiceCopilotProxy,
     applyAuthChoiceQwenPortal,
-    applyAuthChoiceLocalGguf,
+    applyAuthChoiceLmStudio,
   ];
 
   for (const handler of handlers) {

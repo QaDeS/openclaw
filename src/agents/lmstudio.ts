@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { ModelDefinitionConfig, ProviderConfig } from "../config/types.models.js";
+import type { ModelDefinitionConfig, ModelProviderConfig } from "../config/types.models.js";
 import type { OpenClawConfig } from "../config/config.js";
 
 const GGUF_DEFAULT_CONTEXT_WINDOW = 8192;
@@ -60,13 +60,27 @@ export async function discoverLocalGgufModels(
     return models;
 }
 
-export async function resolveImplicitLocalGgufProvider(params: {
+export async function resolveImplicitLmStudioProvider(params: {
     config: OpenClawConfig;
     env?: NodeJS.ProcessEnv;
-}): Promise<ProviderConfig | null> {
-    const providerConfig = params.config.models?.providers?.["local-gguf"];
+}): Promise<ModelProviderConfig | null> {
+    const providerConfig = params.config.models?.providers?.["lmstudio"];
 
-    // Check for MODEL_PATH env var if no config or if config uses it
+    // 1. API Mode Check (Explicit config or Env)
+    const apiUrl = providerConfig?.baseUrl?.startsWith("http")
+        ? providerConfig.baseUrl
+        : params.env?.LM_STUDIO_URL || params.env?.LMSTUDIO_API_BASE;
+
+    if (apiUrl) {
+        return {
+            baseUrl: apiUrl,
+            apiKey: providerConfig?.apiKey || params.env?.LM_STUDIO_TOKEN || params.env?.LMSTUDIO_API_KEY,
+            api: "openai-completions", // Use OpenAI compatibility for LM Studio API
+            models: [], // Discovery happens via API probing in discovery source
+        };
+    }
+
+    // 2. File Mode Check (Legacy GGUF)
     let folderPath: string | undefined;
 
     if (providerConfig?.baseUrl?.startsWith("file://")) {
@@ -82,7 +96,7 @@ export async function resolveImplicitLocalGgufProvider(params: {
     const models = await discoverLocalGgufModels(folderPath);
 
     if (models.length === 0) {
-        return null;
+        return null; // Don't configure if path is empty/invalid
     }
 
     return {
