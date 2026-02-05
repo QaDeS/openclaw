@@ -22,7 +22,8 @@ export type AuthChoiceGroupId =
   | "minimax"
   | "synthetic"
   | "venice"
-  | "qwen";
+  | "qwen"
+  | "local";
 
 export type AuthChoiceGroup = {
   value: AuthChoiceGroupId;
@@ -126,6 +127,12 @@ const AUTH_CHOICE_GROUP_DEFS: {
       label: "Cloudflare AI Gateway",
       hint: "Account ID + Gateway ID + API key",
       choices: ["cloudflare-ai-gateway-api-key"],
+    },
+    {
+      value: "local",
+      label: "Local",
+      hint: "GGUF models",
+      choices: ["local-gguf"],
     },
   ];
 

@@ -1,6 +1,9 @@
 import { type OpenClawConfig, loadConfig } from "../config/config.js";
 import { resolveOpenClawAgentDir } from "./agent-paths.js";
 import { ensureOpenClawModelsJson } from "./models-config.js";
+import { resolveImplicitLocalGgufProvider } from "./local-gguf-models.js";
+import type { ModelDiscoverySource, DiscoveredModel } from "./discovery-types.js";
+import { LocalGgufDiscoverySource } from "./local-gguf-discovery.js";
 
 export type ModelCatalogEntry = {
   id: string;
@@ -11,14 +14,7 @@ export type ModelCatalogEntry = {
   input?: Array<"text" | "image">;
 };
 
-type DiscoveredModel = {
-  id: string;
-  name?: string;
-  provider: string;
-  contextWindow?: number;
-  reasoning?: boolean;
-  input?: Array<"text" | "image">;
-};
+
 
 type PiSdkModule = typeof import("./pi-model-discovery.js");
 
@@ -59,59 +55,71 @@ export async function loadModelCatalog(params?: {
         }
         return a.name.localeCompare(b.name);
       });
+
     try {
       const cfg = params?.config ?? loadConfig();
       await ensureOpenClawModelsJson(cfg);
-      // IMPORTANT: keep the dynamic import *inside* the try/catch.
-      // If this fails once (e.g. during a pnpm install that temporarily swaps node_modules),
-      // we must not poison the cache with a rejected promise (otherwise all channel handlers
-      // will keep failing until restart).
-      const piSdk = await importPiSdk();
-      const agentDir = resolveOpenClawAgentDir();
-      const { join } = await import("node:path");
-      const authStorage = new piSdk.AuthStorage(join(agentDir, "auth.json"));
-      const registry = new piSdk.ModelRegistry(authStorage, join(agentDir, "models.json")) as
-        | {
-            getAll: () => Array<DiscoveredModel>;
+
+      // Discovery sources
+      const sources: ModelDiscoverySource[] = [
+        // PI SDK Adapter
+        {
+          async discover() {
+            // IMPORTANT: keep the dynamic import *inside* the try/catch.
+            const piSdk = await importPiSdk();
+            const agentDir = resolveOpenClawAgentDir();
+            const { join } = await import("node:path");
+            const authStorage = new piSdk.AuthStorage(join(agentDir, "auth.json"));
+            const registry = new piSdk.ModelRegistry(authStorage, join(agentDir, "models.json")) as
+              | { getAll: () => Array<DiscoveredModel> }
+              | Array<DiscoveredModel>;
+
+            const entries = Array.isArray(registry) ? registry : registry.getAll();
+            // Map to shared type if strictly necessary, but shapes match
+            return entries as DiscoveredModel[];
           }
-        | Array<DiscoveredModel>;
-      const entries = Array.isArray(registry) ? registry : registry.getAll();
-      for (const entry of entries) {
-        const id = String(entry?.id ?? "").trim();
-        if (!id) {
-          continue;
+        },
+        // Local GGUF
+        new LocalGgufDiscoverySource(),
+      ];
+
+      for (const source of sources) {
+        try {
+          const discovered = await source.discover({ config: cfg, env: process.env });
+          for (const entry of discovered) {
+            const id = String(entry?.id ?? "").trim();
+            if (!id) continue;
+            const provider = String(entry?.provider ?? "").trim();
+            if (!provider) continue;
+
+            const name = String(entry?.name ?? id).trim() || id;
+            models.push({
+              id,
+              name,
+              provider,
+              contextWindow: entry.contextWindow,
+              reasoning: entry.reasoning,
+              input: entry.input
+            });
+          }
+        } catch (e) {
+          console.warn(`[model-catalog] Source failed:`, e);
         }
-        const provider = String(entry?.provider ?? "").trim();
-        if (!provider) {
-          continue;
-        }
-        const name = String(entry?.name ?? id).trim() || id;
-        const contextWindow =
-          typeof entry?.contextWindow === "number" && entry.contextWindow > 0
-            ? entry.contextWindow
-            : undefined;
-        const reasoning = typeof entry?.reasoning === "boolean" ? entry.reasoning : undefined;
-        const input = Array.isArray(entry?.input) ? entry.input : undefined;
-        models.push({ id, name, provider, contextWindow, reasoning, input });
       }
 
       if (models.length === 0) {
-        // If we found nothing, don't cache this result so we can try again.
         modelCatalogPromise = null;
       }
-
       return sortModels(models);
+
     } catch (error) {
+      // ... existing error handling ...
       if (!hasLoggedModelCatalogError) {
         hasLoggedModelCatalogError = true;
         console.warn(`[model-catalog] Failed to load model catalog: ${String(error)}`);
       }
-      // Don't poison the cache on transient dependency/filesystem issues.
       modelCatalogPromise = null;
-      if (models.length > 0) {
-        return sortModels(models);
-      }
-      return [];
+      return models.length > 0 ? sortModels(models) : [];
     }
   })();
 
