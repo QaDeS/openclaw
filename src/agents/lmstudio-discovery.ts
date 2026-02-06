@@ -75,7 +75,19 @@ export class LmStudioDiscoverySource implements ModelDiscoverySource {
         }
 
         const discovered = await this.discoverFromLmStudioApi(provider.baseUrl, headers);
-        results.push(...discovered);
+        if (discovered.length > 0) {
+          results.push(...discovered);
+        } else {
+          // LM Studio is configured but no models found (server down or no models loaded).
+          // Return a placeholder so the provider appears in model selection UI.
+          results.push({
+            id: "(no models loaded)",
+            name: "LM Studio (start server and load a model)",
+            provider: "lmstudio",
+            contextWindow: 128000,
+            input: ["text"],
+          });
+        }
       }
     } catch (err) {
       console.warn("[discovery] Failed to resolve LM Studio models:", err);
