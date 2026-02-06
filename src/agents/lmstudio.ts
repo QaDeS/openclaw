@@ -75,7 +75,7 @@ export async function resolveImplicitLmStudioProvider(params: {
     return {
       baseUrl: apiUrl,
       apiKey: providerConfig?.apiKey || params.env?.LM_STUDIO_TOKEN || params.env?.LMSTUDIO_API_KEY,
-      api: "openai-completions", // Use OpenAI compatibility for LM Studio API
+      api: "openai-responses", // Responses API for better reasoning separation
       models: [], // Discovery happens via API probing in discovery source
     };
   }

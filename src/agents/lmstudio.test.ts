@@ -21,7 +21,7 @@ describe("lmstudio", () => {
     const provider = await resolveImplicitLmStudioProvider({ config });
     expect(provider).not.toBeNull();
     expect(provider?.baseUrl).toBe("http://localhost:1234");
-    expect(provider?.api).toBe("openai-completions");
+    expect(provider?.api).toBe("openai-responses");
     expect(provider?.models).toEqual([]); // Models discovered separately via API
   });
 

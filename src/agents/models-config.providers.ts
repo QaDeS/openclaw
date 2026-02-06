@@ -401,6 +401,7 @@ async function buildOllamaProvider(): Promise<ProviderConfig> {
 
 export async function resolveImplicitProviders(params: {
   agentDir: string;
+  config?: OpenClawConfig;
 }): Promise<ModelsConfig["providers"]> {
   const providers: Record<string, ProviderConfig> = {};
   const authStore = ensureAuthProfileStore(params.agentDir, {
@@ -410,7 +411,7 @@ export async function resolveImplicitProviders(params: {
   // LM Studio provider (local API or file mode)
   // Resolve from config and environment variables
   try {
-    const config = loadConfig();
+    const config = params.config ?? loadConfig();
     const lmstudioProvider = await resolveImplicitLmStudioProvider({
       config,
       env: process.env,

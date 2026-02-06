@@ -51,7 +51,7 @@ export async function applyAuthChoiceLmStudio(
           ...config.models?.providers,
           lmstudio: {
             baseUrl: `file://${modelsDir}`,
-            api: "openai-completions",
+            api: "openai-responses",
             models: [],
           },
         },
@@ -77,7 +77,7 @@ export async function applyAuthChoiceLmStudio(
           ...config.models?.providers,
           lmstudio: {
             baseUrl: String(url).trim(),
-            api: "openai-completions",
+            api: "openai-responses",
             models: [],
           },
         },

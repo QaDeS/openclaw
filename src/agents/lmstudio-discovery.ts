@@ -55,7 +55,7 @@ export class LmStudioDiscoverySource implements ModelDiscoverySource {
         env: context.env,
       });
 
-      if (provider?.models) {
+      if (provider?.models && provider.models.length > 0) {
         // File-based models (pre-discovered in resolveImplicitLmStudioProvider)
         for (const model of provider.models) {
           results.push({
