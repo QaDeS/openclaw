@@ -21,11 +21,6 @@ type LmStudioModelsResponse = {
   data: LmStudioModel[];
 };
 
-// Fallback OpenAI-compatible response (used when LM Studio API unavailable)
-type OpenAIModelsResponse = {
-  data: Array<{ id: string }>;
-};
-
 async function fetchWithTimeout(
   url: string,
   options: RequestInit,
@@ -74,7 +69,9 @@ export class LmStudioDiscoverySource implements ModelDiscoverySource {
           headers["Authorization"] = `Bearer ${provider.apiKey}`;
         }
 
-        const discovered = await this.discoverFromLmStudioApi(provider.baseUrl, headers);
+        // Strip /v1 suffix for discovery endpoint construction
+        const discoveryBaseUrl = provider.baseUrl.replace(/\/v1\/?$/, "");
+        const discovered = await this.discoverFromLmStudioApi(discoveryBaseUrl, headers);
         if (discovered.length > 0) {
           results.push(...discovered);
         } else {
@@ -101,10 +98,9 @@ export class LmStudioDiscoverySource implements ModelDiscoverySource {
   ): Promise<DiscoveredModel[]> {
     const results: DiscoveredModel[] = [];
 
-    // First, try LM Studio's native API v0 for detailed model info
     try {
       const response = await fetchWithTimeout(
-        `${baseUrl}/api/v0/models`,
+        `${baseUrl}/api/v1/models`,
         { method: "GET", headers },
         2000,
       );
@@ -124,34 +120,6 @@ export class LmStudioDiscoverySource implements ModelDiscoverySource {
               input: model.type === "vlm" ? ["text", "image"] : ["text"],
               // Detect reasoning models by arch or id
               reasoning: this.isReasoningModel(model),
-            });
-          }
-          return results;
-        }
-      }
-    } catch {
-      // LM Studio API v0 not available, fall through to OpenAI-compatible endpoint
-    }
-
-    // Fallback: OpenAI-compatible /v1/models (less detailed)
-    try {
-      const response = await fetchWithTimeout(
-        `${baseUrl}/v1/models`,
-        { method: "GET", headers },
-        1000,
-      );
-
-      if (response.ok) {
-        const data = (await response.json()) as OpenAIModelsResponse;
-        if (Array.isArray(data.data)) {
-          for (const model of data.data) {
-            results.push({
-              id: model.id,
-              name: model.id,
-              provider: "lmstudio",
-              // Can't determine from OpenAI-compat API, use reasonable default
-              contextWindow: 128000,
-              input: ["text"],
             });
           }
         }
