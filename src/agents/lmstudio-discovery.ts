@@ -38,6 +38,14 @@ async function fetchWithTimeout(
 }
 
 export class LmStudioDiscoverySource implements ModelDiscoverySource {
+  private static cache: {
+    models: DiscoveredModel[];
+    expiresAt: number;
+    baseUrl?: string;
+  } | null = null;
+
+  private static inFlightRequests = new Map<string, Promise<DiscoveredModel[]>>();
+
   async discover(context: {
     config?: OpenClawConfig;
     env?: NodeJS.ProcessEnv;
@@ -71,22 +79,57 @@ export class LmStudioDiscoverySource implements ModelDiscoverySource {
           headers["Authorization"] = `Bearer ${provider.apiKey}`;
         }
 
-        // Strip /v1 suffix for discovery endpoint construction
-        const discoveryBaseUrl = provider.baseUrl.replace(/\/v1\/?$/, "");
-        const discovered = await this.discoverFromLmStudioApi(discoveryBaseUrl, headers);
-        if (discovered.length > 0) {
-          results.push(...discovered);
-        } else {
-          // LM Studio is configured but no models found (server down or no models loaded).
-          // Return a placeholder so the provider appears in model selection UI.
-          results.push({
-            id: "(no models loaded)",
-            name: "LM Studio (start server and load a model)",
-            provider: "lmstudio",
-            contextWindow: 128000,
-            input: ["text"],
-          });
+        // Normalize baseUrl to strip trailing slashes and /v1 suffix for discovery
+        const discoveryBaseUrl = provider.baseUrl.replace(/\/+$/, "").replace(/\/v1$/, "");
+
+        // Check cache (5s TTL)
+        const now = Date.now();
+        if (
+          LmStudioDiscoverySource.cache &&
+          LmStudioDiscoverySource.cache.baseUrl === discoveryBaseUrl &&
+          LmStudioDiscoverySource.cache.expiresAt > now
+        ) {
+          return LmStudioDiscoverySource.cache.models;
         }
+
+        // Handle concurrent same-URL requests
+        const inFlight = LmStudioDiscoverySource.inFlightRequests.get(discoveryBaseUrl);
+        if (inFlight) {
+          return inFlight;
+        }
+
+        const fetchPromise = (async () => {
+          try {
+            const discovered = await this.discoverFromLmStudioApi(discoveryBaseUrl, headers);
+            const finalResults: DiscoveredModel[] = [];
+            if (discovered.length > 0) {
+              finalResults.push(...discovered);
+            } else {
+              // LM Studio is configured but no models found (server down or no models loaded).
+              // Return a placeholder so the provider appears in model selection UI.
+              finalResults.push({
+                id: "(no models loaded)",
+                name: "LM Studio (start server and load a model)",
+                provider: "lmstudio",
+                contextWindow: 128000,
+                input: ["text"],
+              });
+            }
+
+            // Update cache
+            LmStudioDiscoverySource.cache = {
+              models: finalResults,
+              expiresAt: Date.now() + 5000,
+              baseUrl: discoveryBaseUrl,
+            };
+            return finalResults;
+          } finally {
+            LmStudioDiscoverySource.inFlightRequests.delete(discoveryBaseUrl);
+          }
+        })();
+
+        LmStudioDiscoverySource.inFlightRequests.set(discoveryBaseUrl, fetchPromise);
+        return fetchPromise;
       }
     } catch (err) {
       console.warn("[discovery] Failed to resolve LM Studio models:", err);
@@ -100,36 +143,41 @@ export class LmStudioDiscoverySource implements ModelDiscoverySource {
   ): Promise<DiscoveredModel[]> {
     const results: DiscoveredModel[] = [];
 
+    const url = `${baseUrl}/api/v1/models`;
     try {
       // LM Studio native REST API v1 provides detailed model metadata
       // See: https://lmstudio.ai/docs/developer/rest/endpoints
-      const response = await fetchWithTimeout(
-        `${baseUrl}/api/v1/models`,
-        { method: "GET", headers },
-        2000,
-      );
+      const response = await fetchWithTimeout(url, { method: "GET", headers }, 2000);
 
-      if (response.ok) {
-        const data = (await response.json()) as LmStudioModelsResponse;
-        if (Array.isArray(data.models)) {
-          // Filter out embedding models - they're not useful for chat
-          const chatModels = data.models.filter((m) => m.type !== "embedding");
-          for (const model of chatModels) {
-            results.push({
-              id: model.key,
-              name: model.display_name ?? model.key,
-              provider: "lmstudio",
-              contextWindow: model.max_context_length,
-              // Vision capability from model metadata
-              input: model.capabilities?.vision ? ["text", "image"] : ["text"],
-              // Detect reasoning models by architecture or key
-              reasoning: this.isReasoningModel(model),
-            });
-          }
-        }
+      if (!response.ok) {
+        console.warn(`[lmstudio] ${url} returned ${response.status}`);
+        return results;
       }
-    } catch {
-      // Server might be down, ignore
+
+      const data = (await response.json()) as LmStudioModelsResponse;
+      if (!Array.isArray(data.models)) {
+        console.warn(`[lmstudio] ${url} response missing models array:`, Object.keys(data));
+        return results;
+      }
+
+      // Filter out embedding models - they're not useful for chat
+      const chatModels = data.models.filter((m) => m.type !== "embedding");
+      for (const model of chatModels) {
+        // If a model has no loaded instances, it may not be ready to use immediately,
+        // but it's still good to show in the catalog.
+        results.push({
+          id: model.key,
+          name: model.display_name ?? model.key,
+          provider: "lmstudio",
+          contextWindow: model.max_context_length,
+          // Vision capability from model metadata
+          input: model.capabilities?.vision ? ["text", "image"] : ["text"],
+          // Detect reasoning models by architecture or key
+          reasoning: this.isReasoningModel(model),
+        });
+      }
+    } catch (err) {
+      console.warn(`[lmstudio] Failed to fetch ${url}:`, err);
     }
 
     return results;

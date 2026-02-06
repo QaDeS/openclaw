@@ -72,8 +72,12 @@ export async function resolveImplicitLmStudioProvider(params: {
     : params.env?.LM_STUDIO_URL || params.env?.LMSTUDIO_API_BASE;
 
   if (apiUrl) {
+    // Standardize to include /v1 suffix for OpenAI-compatible chat completions
+    const normalizedUrl = apiUrl.replace(/\/+$/, "");
+    const finalUrl = normalizedUrl.endsWith("/v1") ? normalizedUrl : `${normalizedUrl}/v1`;
+
     return {
-      baseUrl: apiUrl,
+      baseUrl: finalUrl,
       apiKey: providerConfig?.apiKey || params.env?.LM_STUDIO_TOKEN || params.env?.LMSTUDIO_API_KEY,
       api: "openai-responses", // Responses API for better reasoning separation
       models: [], // Discovery happens via API probing in discovery source

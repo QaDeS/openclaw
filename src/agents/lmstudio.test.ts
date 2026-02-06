@@ -20,7 +20,7 @@ describe("lmstudio", () => {
 
     const provider = await resolveImplicitLmStudioProvider({ config });
     expect(provider).not.toBeNull();
-    expect(provider?.baseUrl).toBe("http://localhost:1234");
+    expect(provider?.baseUrl).toBe("http://localhost:1234/v1");
     expect(provider?.api).toBe("openai-responses");
     expect(provider?.models).toEqual([]); // Models discovered separately via API
   });
@@ -31,6 +31,6 @@ describe("lmstudio", () => {
 
     const provider = await resolveImplicitLmStudioProvider({ config, env });
     expect(provider).not.toBeNull();
-    expect(provider?.baseUrl).toBe("http://localhost:5555");
+    expect(provider?.baseUrl).toBe("http://localhost:5555/v1");
   });
 });
