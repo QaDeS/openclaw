@@ -407,7 +407,7 @@ export async function resolveImplicitProviders(params: {
     allowKeychainPrompt: false,
   });
 
-  // LM Studio provider (local GGUF or API mode)
+  // LM Studio provider (local API or file mode)
   // Resolve from config and environment variables
   try {
     const config = loadConfig();

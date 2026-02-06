@@ -36,7 +36,6 @@ export type AuthChoice =
   | "copilot-proxy"
   | "qwen-portal"
   | "lmstudio"
-  | "local-gguf"
   | "skip";
 export type GatewayAuthChoice = "token" | "password";
 export type ResetScope = "config" | "config+creds+sessions" | "full";

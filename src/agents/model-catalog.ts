@@ -1,9 +1,9 @@
+import type { ModelDiscoverySource, DiscoveredModel } from "./discovery-types.js";
 import { type OpenClawConfig, loadConfig } from "../config/config.js";
 import { resolveOpenClawAgentDir } from "./agent-paths.js";
-import { ensureOpenClawModelsJson } from "./models-config.js";
-import { resolveImplicitLmStudioProvider } from "./lmstudio.js";
-import type { ModelDiscoverySource, DiscoveredModel } from "./discovery-types.js";
 import { LmStudioDiscoverySource } from "./lmstudio-discovery.js";
+import { resolveImplicitLmStudioProvider } from "./lmstudio.js";
+import { ensureOpenClawModelsJson } from "./models-config.js";
 
 export type ModelCatalogEntry = {
   id: string;
@@ -13,8 +13,6 @@ export type ModelCatalogEntry = {
   reasoning?: boolean;
   input?: Array<"text" | "image">;
 };
-
-
 
 type PiSdkModule = typeof import("./pi-model-discovery.js");
 
@@ -77,9 +75,9 @@ export async function loadModelCatalog(params?: {
             const entries = Array.isArray(registry) ? registry : registry.getAll();
             // Map to shared type if strictly necessary, but shapes match
             return entries as DiscoveredModel[];
-          }
+          },
         },
-        // LM Studio (Local / GGUF)
+        // LM Studio (local models)
         new LmStudioDiscoverySource(),
       ];
 
@@ -99,7 +97,7 @@ export async function loadModelCatalog(params?: {
               provider,
               contextWindow: entry.contextWindow,
               reasoning: entry.reasoning,
-              input: entry.input
+              input: entry.input,
             });
           }
         } catch (e) {
@@ -111,7 +109,6 @@ export async function loadModelCatalog(params?: {
         modelCatalogPromise = null;
       }
       return sortModels(models);
-
     } catch (error) {
       // ... existing error handling ...
       if (!hasLoggedModelCatalogError) {
