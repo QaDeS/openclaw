@@ -76,7 +76,7 @@ For automatic discovery, you can use a minimal config:
     mode: "merge",
     providers: {
       lmstudio: {
-        baseUrl: "http://127.0.0.1:1234",
+        baseUrl: "http://127.0.0.1:1234/v1",
         api: "openai-responses",
       },
     },
@@ -84,7 +84,7 @@ For automatic discovery, you can use a minimal config:
 }
 ```
 
-OpenClaw will query the LM Studio API (`/api/v0/models`) to discover loaded models with their full metadata. If LM Studio's native API is unavailable, it falls back to the OpenAI-compatible `/v1/models` endpoint with sensible defaults.
+OpenClaw queries the LM Studio native REST API (`/api/v1/models`) to discover models with their full metadata including context window, vision capabilities, and architecture.
 
 To override or supplement discovered models, add explicit entries to the `models` array in the provider config.
 

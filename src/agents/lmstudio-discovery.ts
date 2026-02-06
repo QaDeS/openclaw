@@ -2,23 +2,25 @@ import type { OpenClawConfig } from "../config/config.js";
 import type { ModelDiscoverySource, DiscoveredModel } from "./discovery-types.js";
 import { resolveImplicitLmStudioProvider } from "./lmstudio.js";
 
-// LM Studio API v0 model response type
+// LM Studio REST API v1 model response type
 // See: https://lmstudio.ai/docs/developer/rest/endpoints
 type LmStudioModel = {
-  id: string;
-  object: "model";
-  type: "llm" | "vlm" | "embeddings";
+  type: "llm" | "embedding";
   publisher?: string;
-  arch?: string;
-  compatibility_type?: "gguf" | "mlx" | "safetensors";
-  quantization?: string;
-  state?: "loaded" | "not-loaded";
+  key: string;
+  display_name?: string;
+  architecture?: string;
+  quantization?: { name: string; bits_per_weight: number };
   max_context_length?: number;
+  capabilities?: {
+    vision?: boolean;
+    trained_for_tool_use?: boolean;
+  };
+  loaded_instances?: Array<{ id: string }>;
 };
 
 type LmStudioModelsResponse = {
-  object: "list";
-  data: LmStudioModel[];
+  models: LmStudioModel[];
 };
 
 async function fetchWithTimeout(
@@ -99,6 +101,8 @@ export class LmStudioDiscoverySource implements ModelDiscoverySource {
     const results: DiscoveredModel[] = [];
 
     try {
+      // LM Studio native REST API v1 provides detailed model metadata
+      // See: https://lmstudio.ai/docs/developer/rest/endpoints
       const response = await fetchWithTimeout(
         `${baseUrl}/api/v1/models`,
         { method: "GET", headers },
@@ -107,18 +111,18 @@ export class LmStudioDiscoverySource implements ModelDiscoverySource {
 
       if (response.ok) {
         const data = (await response.json()) as LmStudioModelsResponse;
-        if (Array.isArray(data.data)) {
+        if (Array.isArray(data.models)) {
           // Filter out embedding models - they're not useful for chat
-          const chatModels = data.data.filter((m) => m.type !== "embeddings");
+          const chatModels = data.models.filter((m) => m.type !== "embedding");
           for (const model of chatModels) {
             results.push({
-              id: model.id,
-              name: model.id,
+              id: model.key,
+              name: model.display_name ?? model.key,
               provider: "lmstudio",
               contextWindow: model.max_context_length,
-              // VLM = vision language model, supports image input
-              input: model.type === "vlm" ? ["text", "image"] : ["text"],
-              // Detect reasoning models by arch or id
+              // Vision capability from model metadata
+              input: model.capabilities?.vision ? ["text", "image"] : ["text"],
+              // Detect reasoning models by architecture or key
               reasoning: this.isReasoningModel(model),
             });
           }
@@ -132,15 +136,15 @@ export class LmStudioDiscoverySource implements ModelDiscoverySource {
   }
 
   private isReasoningModel(model: LmStudioModel): boolean {
-    const id = model.id.toLowerCase();
-    const arch = model.arch?.toLowerCase() ?? "";
+    const key = model.key.toLowerCase();
+    const arch = model.architecture?.toLowerCase() ?? "";
 
     // Common reasoning model patterns
     return (
-      id.includes("r1") ||
-      id.includes("reasoning") ||
-      id.includes("qwq") ||
-      id.includes("deepseek-r") ||
+      key.includes("r1") ||
+      key.includes("reasoning") ||
+      key.includes("qwq") ||
+      key.includes("deepseek-r") ||
       arch.includes("r1")
     );
   }

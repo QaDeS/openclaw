@@ -13,7 +13,7 @@ export async function applyAuthChoiceLmStudio(
   const mode = await params.prompter.select({
     message: "Connect to LM Studio via:",
     options: [
-      { value: "api", label: "Local Server API", hint: "http://localhost:1234 (recommended)" },
+      { value: "api", label: "Local Server API", hint: "http://localhost:1234/v1 (recommended)" },
       { value: "folder", label: "Model Folder", hint: "Scan local model files directly" },
     ],
   });
@@ -60,7 +60,7 @@ export async function applyAuthChoiceLmStudio(
   } else {
     const url = await params.prompter.text({
       message: "LM Studio Server URL",
-      initialValue: "http://localhost:1234",
+      initialValue: "http://localhost:1234/v1",
       validate: (value) =>
         value?.trim().startsWith("http") ? undefined : "Must be a valid HTTP URL",
     });

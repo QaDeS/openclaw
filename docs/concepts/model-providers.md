@@ -261,16 +261,16 @@ Ollama is automatically detected when running locally at `http://127.0.0.1:11434
 
 ### LM Studio
 
-LM Studio provides a local LLM runtime with OpenAI-compatible API:
+LM Studio provides a local LLM runtime with OpenAI-compatible API and Responses API support:
 
 - Provider: `lmstudio`
-- Auth: None required (local server)
-- Default URL: `http://127.0.0.1:1234`
+- Auth: Optional (set `apiKey` if LM Studio requires authentication)
+- Default URL: `http://127.0.0.1:1234/v1`
 - Installation: https://lmstudio.ai
 
 **Automatic discovery (recommended):**
 
-OpenClaw automatically discovers models from LM Studio with accurate metadata:
+OpenClaw automatically discovers models from LM Studio via the native REST API (`/api/v1/models`):
 
 ```json5
 {
@@ -280,7 +280,7 @@ OpenClaw automatically discovers models from LM Studio with accurate metadata:
   models: {
     providers: {
       lmstudio: {
-        baseUrl: "http://127.0.0.1:1234",
+        baseUrl: "http://127.0.0.1:1234/v1",
         api: "openai-responses",
       },
     },
@@ -309,9 +309,9 @@ For explicit control or when auto-discovery is unavailable:
   models: {
     providers: {
       lmstudio: {
-        baseUrl: "http://localhost:1234",
+        baseUrl: "http://localhost:1234/v1",
         apiKey: "LMSTUDIO_KEY",
-        api: "openai-completions",
+        api: "openai-responses",
         models: [
           {
             id: "minimax-m2.1-gs32",
