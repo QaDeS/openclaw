@@ -1,72 +1,167 @@
+import type { OpenClawConfig } from "../config/config.js";
 import type { ModelDiscoverySource, DiscoveredModel } from "./discovery-types.js";
 import { resolveImplicitLmStudioProvider } from "./lmstudio.js";
-import type { OpenClawConfig } from "../config/config.js";
+
+// LM Studio API v0 model response type
+// See: https://lmstudio.ai/docs/developer/rest/endpoints
+type LmStudioModel = {
+  id: string;
+  object: "model";
+  type: "llm" | "vlm" | "embeddings";
+  publisher?: string;
+  arch?: string;
+  compatibility_type?: "gguf" | "mlx" | "safetensors";
+  quantization?: string;
+  state?: "loaded" | "not-loaded";
+  max_context_length?: number;
+};
+
+type LmStudioModelsResponse = {
+  object: "list";
+  data: LmStudioModel[];
+};
+
+// Fallback OpenAI-compatible response (used when LM Studio API unavailable)
+type OpenAIModelsResponse = {
+  data: Array<{ id: string }>;
+};
+
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  timeoutMs: number,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
 
 export class LmStudioDiscoverySource implements ModelDiscoverySource {
-    async discover(context: { config?: OpenClawConfig; env?: NodeJS.ProcessEnv }): Promise<DiscoveredModel[]> {
-        const results: DiscoveredModel[] = [];
-        try {
-            if (!context.config) {
-                return [];
-            }
-            const provider = await resolveImplicitLmStudioProvider({
-                config: context.config,
-                env: context.env,
-            });
+  async discover(context: {
+    config?: OpenClawConfig;
+    env?: NodeJS.ProcessEnv;
+  }): Promise<DiscoveredModel[]> {
+    const results: DiscoveredModel[] = [];
+    try {
+      if (!context.config) {
+        return [];
+      }
+      const provider = await resolveImplicitLmStudioProvider({
+        config: context.config,
+        env: context.env,
+      });
 
-            if (provider?.models) {
-                // File-based models (pre-discovered in resolveImplicitLmStudioProvider)
-                for (const model of provider.models) {
-                    results.push({
-                        id: model.id,
-                        name: model.name,
-                        provider: "lmstudio",
-                        contextWindow: model.contextWindow,
-                        reasoning: model.reasoning,
-                        input: model.input,
-                    });
-                }
-            } else if (provider?.baseUrl?.startsWith("http")) {
-                // API-based discovery
-                try {
-                    // Try to fetch models from LM Studio / OpenAI compatible endpoint
-                    // We set a short timeout to avoid blocking startup if server is down
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 1000);
-
-                    const headers: Record<string, string> = {};
-                    if (provider.apiKey) {
-                        headers["Authorization"] = `Bearer ${provider.apiKey}`;
-                    }
-
-                    const response = await fetch(`${provider.baseUrl}/v1/models`, {
-                        method: 'GET',
-                        headers,
-                        signal: controller.signal
-                    });
-                    clearTimeout(timeoutId);
-
-                    if (response.ok) {
-                        const data = await response.json() as { data: Array<{ id: string }> };
-                        if (Array.isArray(data.data)) {
-                            for (const model of data.data) {
-                                results.push({
-                                    id: model.id,
-                                    name: model.id,
-                                    provider: "lmstudio",
-                                    contextWindow: 128000, // LM Studio usually handles large context, hard to know exactly without metadata
-                                    input: ["text"],
-                                });
-                            }
-                        }
-                    }
-                } catch (e) {
-                    // Ignore API discovery errors (server might be down)
-                }
-            }
-        } catch (err) {
-            console.warn("[discovery] Failed to resolve LM Studio models:", err);
+      if (provider?.models) {
+        // File-based models (pre-discovered in resolveImplicitLmStudioProvider)
+        for (const model of provider.models) {
+          results.push({
+            id: model.id,
+            name: model.name,
+            provider: "lmstudio",
+            contextWindow: model.contextWindow,
+            reasoning: model.reasoning,
+            input: model.input,
+          });
         }
-        return results;
+      } else if (provider?.baseUrl?.startsWith("http")) {
+        // API-based discovery: use LM Studio native API for detailed model info
+        const headers: Record<string, string> = {};
+        if (provider.apiKey) {
+          headers["Authorization"] = `Bearer ${provider.apiKey}`;
+        }
+
+        const discovered = await this.discoverFromLmStudioApi(provider.baseUrl, headers);
+        results.push(...discovered);
+      }
+    } catch (err) {
+      console.warn("[discovery] Failed to resolve LM Studio models:", err);
     }
+    return results;
+  }
+
+  private async discoverFromLmStudioApi(
+    baseUrl: string,
+    headers: Record<string, string>,
+  ): Promise<DiscoveredModel[]> {
+    const results: DiscoveredModel[] = [];
+
+    // First, try LM Studio's native API v0 for detailed model info
+    try {
+      const response = await fetchWithTimeout(
+        `${baseUrl}/api/v0/models`,
+        { method: "GET", headers },
+        2000,
+      );
+
+      if (response.ok) {
+        const data = (await response.json()) as LmStudioModelsResponse;
+        if (Array.isArray(data.data)) {
+          // Filter out embedding models - they're not useful for chat
+          const chatModels = data.data.filter((m) => m.type !== "embeddings");
+          for (const model of chatModels) {
+            results.push({
+              id: model.id,
+              name: model.id,
+              provider: "lmstudio",
+              contextWindow: model.max_context_length,
+              // VLM = vision language model, supports image input
+              input: model.type === "vlm" ? ["text", "image"] : ["text"],
+              // Detect reasoning models by arch or id
+              reasoning: this.isReasoningModel(model),
+            });
+          }
+          return results;
+        }
+      }
+    } catch {
+      // LM Studio API v0 not available, fall through to OpenAI-compatible endpoint
+    }
+
+    // Fallback: OpenAI-compatible /v1/models (less detailed)
+    try {
+      const response = await fetchWithTimeout(
+        `${baseUrl}/v1/models`,
+        { method: "GET", headers },
+        1000,
+      );
+
+      if (response.ok) {
+        const data = (await response.json()) as OpenAIModelsResponse;
+        if (Array.isArray(data.data)) {
+          for (const model of data.data) {
+            results.push({
+              id: model.id,
+              name: model.id,
+              provider: "lmstudio",
+              // Can't determine from OpenAI-compat API, use reasonable default
+              contextWindow: 128000,
+              input: ["text"],
+            });
+          }
+        }
+      }
+    } catch {
+      // Server might be down, ignore
+    }
+
+    return results;
+  }
+
+  private isReasoningModel(model: LmStudioModel): boolean {
+    const id = model.id.toLowerCase();
+    const arch = model.arch?.toLowerCase() ?? "";
+
+    // Common reasoning model patterns
+    return (
+      id.includes("r1") ||
+      id.includes("reasoning") ||
+      id.includes("qwq") ||
+      id.includes("deepseek-r") ||
+      arch.includes("r1")
+    );
+  }
 }

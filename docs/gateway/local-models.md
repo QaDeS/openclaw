@@ -53,12 +53,40 @@ Best current local stack. Load MiniMax M2.1 in LM Studio, enable the local serve
 **Setup checklist**
 
 - Install LM Studio: https://lmstudio.ai
-- In LM Studio, download the **largest MiniMax M2.1 build available** (avoid “small”/heavily quantized variants), start the server, confirm `http://127.0.0.1:1234/v1/models` lists it.
+- In LM Studio, download the **largest MiniMax M2.1 build available** (avoid "small"/heavily quantized variants), start the server, confirm `http://127.0.0.1:1234/v1/models` lists it.
 - Keep the model loaded; cold-load adds startup latency.
 - Adjust `contextWindow`/`maxTokens` if your LM Studio build differs.
 - For WhatsApp, stick to Responses API so only final text is sent.
 
 Keep hosted models configured even when running local; use `models.mode: "merge"` so fallbacks stay available.
+
+### Automatic model discovery
+
+When connecting to LM Studio via HTTP, OpenClaw automatically discovers available models using the LM Studio API. This provides:
+
+- **Accurate context windows**: Uses the actual `max_context_length` from LM Studio instead of hardcoded defaults
+- **Vision model detection**: Automatically detects VLM (vision language models) and enables image input
+- **Reasoning model detection**: Identifies reasoning models (R1, QwQ, DeepSeek-R) by architecture
+
+For automatic discovery, you can use a minimal config:
+
+```json5
+{
+  models: {
+    mode: "merge",
+    providers: {
+      lmstudio: {
+        baseUrl: "http://127.0.0.1:1234",
+        api: "openai-responses",
+      },
+    },
+  },
+}
+```
+
+OpenClaw will query the LM Studio API (`/api/v0/models`) to discover loaded models with their full metadata. If LM Studio's native API is unavailable, it falls back to the OpenAI-compatible `/v1/models` endpoint with sensible defaults.
+
+To override or supplement discovered models, add explicit entries to the `models` array in the provider config.
 
 ### Hybrid config: hosted primary, local fallback
 
