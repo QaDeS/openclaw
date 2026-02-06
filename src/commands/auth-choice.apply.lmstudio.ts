@@ -69,6 +69,15 @@ export async function applyAuthChoiceLmStudio(
       throw new Error("Aborted");
     }
 
+    const apiKey = await params.prompter.text({
+      message: "LM Studio API Key (optional)",
+      initialValue: "none",
+    });
+
+    if (typeof apiKey === "symbol") {
+      throw new Error("Aborted");
+    }
+
     config = {
       ...config,
       models: {
@@ -77,6 +86,7 @@ export async function applyAuthChoiceLmStudio(
           ...config.models?.providers,
           lmstudio: {
             baseUrl: String(url).trim(),
+            apiKey: String(apiKey).trim() || "none",
             api: "openai-responses",
             models: [],
           },

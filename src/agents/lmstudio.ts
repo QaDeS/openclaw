@@ -78,8 +78,15 @@ export async function resolveImplicitLmStudioProvider(params: {
 
     return {
       baseUrl: finalUrl,
-      apiKey: providerConfig?.apiKey || params.env?.LM_STUDIO_TOKEN || params.env?.LMSTUDIO_API_KEY,
-      api: "openai-responses", // Responses API for better reasoning separation
+      apiKey:
+        providerConfig?.apiKey ||
+        params.env?.LM_STUDIO_TOKEN ||
+        params.env?.LMSTUDIO_API_KEY ||
+        "none",
+      api: (providerConfig?.api ||
+        params.env?.LM_STUDIO_API ||
+        params.env?.LMSTUDIO_API ||
+        "openai-responses") as any,
       models: [], // Discovery happens via API probing in discovery source
     };
   }
