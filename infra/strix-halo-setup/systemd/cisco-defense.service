@@ -1,0 +1,14 @@
+[Unit]
+Description=Cisco AI Defense Orchestrator
+After=network.target
+
+[Service]
+User=defense
+WorkingDirectory=/home/defense
+ExecStart=/usr/bin/python3 /home/defense/cisco-defense-daemon.py
+Environment=HSA_OVERRIDE_GFX_VERSION=11.5.1
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target

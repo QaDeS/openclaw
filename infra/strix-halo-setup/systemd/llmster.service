@@ -1,0 +1,16 @@
+[Unit]
+Description=LM Studio Headless Daemon (llmster)
+After=network.target rocm.target
+
+[Service]
+User=lmstudio
+WorkingDirectory=/home/lmstudio
+ExecStart=/home/lmstudio/bin/lm-studio.AppImage --headless
+Environment=HSA_OVERRIDE_GFX_VERSION=11.5.1
+Environment=PYTORCH_ALLOC_CONF=expandable_segments:True
+Restart=always
+RestartSec=10
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+[Install]
+WantedBy=multi-user.target

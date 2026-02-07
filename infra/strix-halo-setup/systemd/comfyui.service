@@ -1,0 +1,15 @@
+[Unit]
+Description=ComfyUI Backend Service
+After=network.target rocm.target
+
+[Service]
+User=comfyui
+WorkingDirectory=/home/comfyui/ComfyUI
+ExecStart=/usr/bin/python3 main.py --listen 0.0.0.0
+Environment=HSA_OVERRIDE_GFX_VERSION=11.5.1
+Environment=PYTORCH_ALLOC_CONF=expandable_segments:True
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

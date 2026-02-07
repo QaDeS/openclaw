@@ -1,0 +1,15 @@
+[Unit]
+Description=OpenClaw Docker Daemon
+After=docker.service
+Requires=docker.service
+
+[Service]
+User=claw
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/home/claw
+ExecStart=/usr/bin/docker compose -f openclaw-compose.yml --env-file .openclaw/docker.env up -d
+ExecStop=/usr/bin/docker compose -f openclaw-compose.yml down
+
+[Install]
+WantedBy=multi-user.target

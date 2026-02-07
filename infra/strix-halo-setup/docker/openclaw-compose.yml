@@ -1,0 +1,17 @@
+version: "3.8"
+
+services:
+  openclaw:
+    build:
+      context: ${LOCAL_REPO_PATH}
+      dockerfile: infra/strix-halo-setup/docker/Dockerfile
+    container_name: openclaw_daemon
+    user: "${HOST_UID}:${HOST_GID}"
+    volumes:
+      - ${LOCAL_REPO_PATH}:/app
+      - /home/claw/.openclaw:/root/.openclaw
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - LMSTUDIO_BASE_URL=${LMSTUDIO_BASE_URL}
+    network_mode: host

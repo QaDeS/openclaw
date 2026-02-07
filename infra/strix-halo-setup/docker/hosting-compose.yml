@@ -1,0 +1,42 @@
+version: "3.8"
+
+services:
+  supabase:
+    image: supabase/postgres:latest
+    container_name: supabase_db
+    environment:
+      POSTGRES_PASSWORD: ${SUPABASE_DB_PASSWORD}
+    volumes:
+      - supabase_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - hosting_net
+
+  wordpress:
+    image: wordpress:latest
+    container_name: wordpress_multisite
+    depends_on:
+      - supabase
+    environment:
+      WORDPRESS_DB_HOST: supabase:5432
+      WORDPRESS_DB_USER: postgres
+      WORDPRESS_DB_PASSWORD: ${SUPABASE_DB_PASSWORD}
+      WORDPRESS_CONFIG_EXTRA: |
+        define('MULTISITE', true);
+        define('SUBDOMAIN_INSTALL', false);
+        define('DOMAIN_CURRENT_SITE', 'localhost');
+        define('PATH_CURRENT_SITE', '/');
+        define('SITE_ID_CURRENT_SITE', 1);
+        define('BLOG_ID_CURRENT_SITE', 1);
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+    networks:
+      - hosting_net
+
+networks:
+  hosting_net:
+    driver: bridge
+
+volumes:
+  supabase_data:
