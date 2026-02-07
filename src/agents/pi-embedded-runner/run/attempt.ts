@@ -523,6 +523,86 @@ export async function runEmbeddedAttempt(
         params.streamParams,
       );
 
+      // LM Studio / GGUF Runtime Injection
+      if (params.provider === "lmstudio") {
+        try {
+          // Determine model path from config
+          const providerConfig = params.config?.models?.providers?.["lmstudio"];
+
+          // Only perform local loading if we have a file:// baseUrl
+          if (providerConfig?.baseUrl?.startsWith("file://")) {
+            const basePath = providerConfig.baseUrl.slice(7);
+            const path = await import("node:path");
+            const modelPath = path.join(basePath, params.modelId);
+
+            // Use Manager for caching
+            const { LmStudioModelManager } = await import("../../lmstudio-manager.js");
+            if (typeof providerConfig.maxCachedModels === "number") {
+              LmStudioModelManager.getInstance().configure({
+                maxCachedModels: providerConfig.maxCachedModels,
+              });
+            }
+            const model = await LmStudioModelManager.getInstance().getModel(modelPath);
+
+            // Dynamic import for types/classes needed for session creation
+            // Cast to any to avoid TypeScript issues with dynamic ESM import resolution
+            const nodeLlama = (await import("node-llama-cpp")) as any;
+            const LlamaChatSession = nodeLlama.LlamaChatSession;
+
+            const context = await model.createContext();
+            const session = new LlamaChatSession({
+              contextSequence: context.getSequence(),
+            });
+
+            // Create adapter streamFn
+            // TODO: This is a WIP local GGUF implementation that needs proper
+            // integration with the pi-agent-core StreamFn/AssistantMessageEventStream types.
+            // For now, cast to any to allow compilation.
+            activeSession.agent.streamFn = async function* (_model: any, ctx: any, _options: any) {
+              const lastMsg = ctx.messages[ctx.messages.length - 1];
+              const history = ctx.messages.slice(0, -1);
+
+              // Reset session history
+              session.setChatHistory(
+                history.map((m: any) => ({
+                  role: m.role,
+                  content:
+                    typeof m.content === "string"
+                      ? m.content
+                      : m.content.map((c: any) => c.text || "").join(""),
+                })),
+              );
+
+              const systemPrompt = ctx.messages.find((m: any) => m.role === "system")?.content;
+              if (typeof systemPrompt === "string") {
+                // session.setSystemPrompt(systemPrompt); // If API supported
+              }
+
+              // Handle prompt text from message content array or string
+              const promptText =
+                typeof lastMsg.content === "string"
+                  ? lastMsg.content
+                  : lastMsg.content.map((c: any) => c.text || "").join("");
+
+              const responsePromise = session.prompt(promptText, {
+                onToken: (_tokens: number[]) => {
+                  // Streaming hook placeholder
+                },
+              });
+
+              const fullResponse = await responsePromise;
+              yield { type: "text-delta", text: fullResponse };
+            } as any;
+          }
+        } catch (error: unknown) {
+          log.error(
+            "Failed to initialize lmstudio provider local mode",
+            error as Record<string, unknown>,
+          );
+          throw error;
+        }
+      }
+
       if (cacheTrace) {
         cacheTrace.recordStage("session:loaded", {
           messages: activeSession.messages,

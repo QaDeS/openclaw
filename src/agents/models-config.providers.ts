@@ -1,5 +1,5 @@
-import type { OpenClawConfig } from "../config/config.js";
 import type { ModelDefinitionConfig } from "../config/types.models.js";
+import { loadConfig, type OpenClawConfig } from "../config/config.js";
 import {
   DEFAULT_COPILOT_API_BASE_URL,
   resolveCopilotApiToken,
@@ -10,6 +10,7 @@ import {
   buildCloudflareAiGatewayModelDefinition,
   resolveCloudflareAiGatewayBaseUrl,
 } from "./cloudflare-ai-gateway.js";
+import { resolveImplicitLmStudioProvider } from "./lmstudio.js";
 import { resolveAwsSdkEnvVarName, resolveEnvApiKey } from "./model-auth.js";
 import {
   buildSyntheticModelDefinition,
@@ -443,11 +444,27 @@ export function buildQianfanProvider(): ProviderConfig {
 
 export async function resolveImplicitProviders(params: {
   agentDir: string;
+  config?: OpenClawConfig;
 }): Promise<ModelsConfig["providers"]> {
   const providers: Record<string, ProviderConfig> = {};
   const authStore = ensureAuthProfileStore(params.agentDir, {
     allowKeychainPrompt: false,
   });
+
+  // LM Studio provider (local API or file mode)
+  // Resolve from config and environment variables
+  try {
+    const config = params.config ?? loadConfig();
+    const lmstudioProvider = await resolveImplicitLmStudioProvider({
+      config,
+      env: process.env,
+    });
+    if (lmstudioProvider) {
+      providers["lmstudio"] = lmstudioProvider;
+    }
+  } catch {
+    // Config loading or LM Studio resolution failed, skip
+  }
 
   const minimaxKey =
     resolveEnvApiKeyVarName("minimax") ??

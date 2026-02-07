@@ -24,7 +24,8 @@ export type AuthChoiceGroupId =
   | "venice"
   | "qwen"
   | "qianfan"
-  | "xai";
+  | "xai"
+  | "local";
 
 export type AuthChoiceGroup = {
   value: AuthChoiceGroupId;
@@ -141,6 +142,12 @@ const AUTH_CHOICE_GROUP_DEFS: {
     hint: "Account ID + Gateway ID + API key",
     choices: ["cloudflare-ai-gateway-api-key"],
   },
+  {
+    value: "local",
+    label: "Local",
+    hint: "LM Studio",
+    choices: ["lmstudio"],
+  },
 ];
 
 export function buildAuthChoiceOptions(params: {
@@ -232,6 +239,11 @@ export function buildAuthChoiceOptions(params: {
     hint: "Claude, GPT, Gemini via opencode.ai/zen",
   });
   options.push({ value: "minimax-api", label: "MiniMax M2.1" });
+  options.push({
+    value: "lmstudio",
+    label: "LM Studio",
+    hint: "Connect to local LM Studio server",
+  });
   options.push({
     value: "minimax-api-lightning",
     label: "MiniMax M2.1 Lightning",

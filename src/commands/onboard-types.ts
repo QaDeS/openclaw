@@ -37,6 +37,7 @@ export type AuthChoice =
   | "qwen-portal"
   | "xai-api-key"
   | "qianfan-api-key"
+  | "lmstudio"
   | "skip";
 export type GatewayAuthChoice = "token" | "password";
 export type ResetScope = "config" | "config+creds+sessions" | "full";

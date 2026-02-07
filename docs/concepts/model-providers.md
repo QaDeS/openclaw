@@ -259,9 +259,44 @@ ollama pull llama3.3
 
 Ollama is automatically detected when running locally at `http://127.0.0.1:11434/v1`. See [/providers/ollama](/providers/ollama) for model recommendations and custom configuration.
 
-### Local proxies (LM Studio, vLLM, LiteLLM, etc.)
+### LM Studio
 
-Example (OpenAI‑compatible):
+LM Studio provides a local LLM runtime with OpenAI-compatible API and Responses API support:
+
+- Provider: `lmstudio`
+- Auth: Optional (set `apiKey` if LM Studio requires authentication)
+- Default URL: `http://127.0.0.1:1234/v1`
+- Installation: https://lmstudio.ai
+
+**Automatic discovery (recommended):**
+
+OpenClaw automatically discovers models from LM Studio via the native REST API (`/api/v1/models`):
+
+```json5
+{
+  agents: {
+    defaults: { model: { primary: "lmstudio/your-model-id" } },
+  },
+  models: {
+    providers: {
+      lmstudio: {
+        baseUrl: "http://127.0.0.1:1234/v1",
+        api: "openai-responses",
+      },
+    },
+  },
+}
+```
+
+Auto-discovery provides:
+
+- Accurate `contextWindow` from LM Studio metadata
+- Vision model detection (VLM models get `input: ["text", "image"]`)
+- Reasoning model detection (R1, QwQ, DeepSeek-R patterns)
+
+**Manual configuration:**
+
+For explicit control or when auto-discovery is unavailable:
 
 ```json5
 {
@@ -276,7 +311,7 @@ Example (OpenAI‑compatible):
       lmstudio: {
         baseUrl: "http://localhost:1234/v1",
         apiKey: "LMSTUDIO_KEY",
-        api: "openai-completions",
+        api: "openai-responses",
         models: [
           {
             id: "minimax-m2.1-gs32",
@@ -285,6 +320,34 @@ Example (OpenAI‑compatible):
             input: ["text"],
             cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
             contextWindow: 200000,
+            maxTokens: 8192,
+          },
+        ],
+      },
+    },
+  },
+}
+```
+
+See [/gateway/local-models](/gateway/local-models) for detailed setup and hybrid configurations.
+
+### Other local proxies (vLLM, LiteLLM, etc.)
+
+For other OpenAI-compatible local proxies:
+
+```json5
+{
+  models: {
+    providers: {
+      local: {
+        baseUrl: "http://127.0.0.1:8000/v1",
+        apiKey: "sk-local",
+        api: "openai-completions",
+        models: [
+          {
+            id: "my-local-model",
+            name: "Local Model",
+            contextWindow: 120000,
             maxTokens: 8192,
           },
         ],

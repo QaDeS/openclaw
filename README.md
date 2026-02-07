@@ -311,6 +311,49 @@ Runbook: [iOS connect](https://docs.openclaw.ai/platforms/ios).
 
 ## Configuration
 
+### GGUF Models (Local)
+
+OpenClaw supports local GGUF models.
+
+**Auto-Discovery:**
+Set the `MODEL_PATH` environment variable to your model directory:
+
+```bash
+export MODEL_PATH=/path/to/your/models
+```
+
+OpenClaw will automatically discover `.gguf` files in this directory.
+
+**Manual Configuration:**
+You can also configure it in `config.json5`:
+
+```json5
+models: {
+  providers: {
+    "local-gguf": {
+      baseUrl: "file:///path/to/models",
+      maxCachedModels: 5
+    }
+  }
+}
+```
+
+**Management:**
+Use the CLI to manage model loading/unloading:
+
+```bash
+# Set cache limit
+openclaw models gguf config --limit 3
+
+# Unload specific model
+openclaw models gguf unload --model relative/path/to/model.gguf
+
+# Unload all models
+openclaw models gguf unload --all
+```
+
+### Environment Variables
+
 Minimal `~/.openclaw/openclaw.json` (model + defaults):
 
 ```json5

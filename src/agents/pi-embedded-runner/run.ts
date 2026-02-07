@@ -241,7 +241,14 @@ export async function runEmbeddedPiAgent(
         apiKeyInfo = await resolveApiKeyForCandidate(candidate);
         const resolvedProfileId = apiKeyInfo.profileId ?? candidate;
         if (!apiKeyInfo.apiKey) {
-          if (apiKeyInfo.mode !== "aws-sdk") {
+          // Allow providers that don't require API keys (aws-sdk chain, local providers)
+          const isLocalProvider =
+            model.provider === "lmstudio" ||
+            model.provider === "ollama" ||
+            model.baseUrl?.startsWith("http://localhost") ||
+            model.baseUrl?.startsWith("http://127.0.0.1") ||
+            model.baseUrl?.startsWith("file://");
+          if (apiKeyInfo.mode !== "aws-sdk" && !isLocalProvider) {
             throw new Error(
               `No API key resolved for provider "${model.provider}" (auth mode: ${apiKeyInfo.mode}).`,
             );

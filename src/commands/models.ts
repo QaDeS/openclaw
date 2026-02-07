@@ -31,3 +31,7 @@ export { modelsListCommand, modelsStatusCommand } from "./models/list.js";
 export { modelsScanCommand } from "./models/scan.js";
 export { modelsSetCommand } from "./models/set.js";
 export { modelsSetImageCommand } from "./models/set-image.js";
+export {
+  modelsLmStudioConfigCommand,
+  modelsLmStudioUnloadCommand,
+} from "./models/lmstudio-manage.js";

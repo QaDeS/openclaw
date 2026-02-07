@@ -60,6 +60,34 @@ Best current local stack. Load MiniMax M2.1 in LM Studio, enable the local serve
 
 Keep hosted models configured even when running local; use `models.mode: "merge"` so fallbacks stay available.
 
+### Automatic model discovery
+
+When connecting to LM Studio via HTTP, OpenClaw automatically discovers available models using the LM Studio API. This provides:
+
+- **Accurate context windows**: Uses the actual `max_context_length` from LM Studio instead of hardcoded defaults
+- **Vision model detection**: Automatically detects VLM (vision language models) and enables image input
+- **Reasoning model detection**: Identifies reasoning models (R1, QwQ, DeepSeek-R) by architecture
+
+For automatic discovery, you can use a minimal config:
+
+```json5
+{
+  models: {
+    mode: "merge",
+    providers: {
+      lmstudio: {
+        baseUrl: "http://127.0.0.1:1234/v1",
+        api: "openai-responses",
+      },
+    },
+  },
+}
+```
+
+OpenClaw queries the LM Studio native REST API (`/api/v1/models`) to discover models with their full metadata including context window, vision capabilities, and architecture.
+
+To override or supplement discovered models, add explicit entries to the `models` array in the provider config.
+
 ### Hybrid config: hosted primary, local fallback
 
 ```json5
