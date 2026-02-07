@@ -1,0 +1,15 @@
+version: "3.8"
+
+services:
+  openclaw:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: openclaw_daemon
+    volumes:
+      - /home/claw/openclaw:/app
+      - /home/claw/.openclaw:/root/.openclaw
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+    network_mode: host
