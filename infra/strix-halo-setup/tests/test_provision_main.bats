@@ -112,18 +112,23 @@ teardown() {
 
 # --- Component sourcing bug detection ---
 
-@test "BUG: provision_strix_halo.sh line 119 has echo before source" {
-    grep -n 'echo source' "$STRIX_DIR/provision_strix_halo.sh" | grep -q '119'
+@test "FIX: no echo before source in component loading" {
+    # Previously line 119 had `echo source` instead of `source`
+    ! grep -q 'echo source' "$STRIX_DIR/provision_strix_halo.sh"
 }
 
-@test "BUG: provision_strix_halo.sh line 122 has debug echo leftover" {
-    grep -n 'echo.*COMPONENT_LIST' "$STRIX_DIR/provision_strix_halo.sh" | grep -q '122'
+@test "FIX: no debug echo of COMPONENT_LIST" {
+    # Previously line 122 had a leftover debug echo
+    ! grep -q 'echo.*COMPONENT_LIST' "$STRIX_DIR/provision_strix_halo.sh"
 }
 
-@test "component glob pattern in main uses quotes but no array expansion" {
-    # Line 118: for component in "${INFRA_DIR}/components/*.sh"
-    # The quotes prevent glob expansion — this is the root cause of --force hang
-    grep -n '"${INFRA_DIR}/components/\*\.sh"' "$STRIX_DIR/provision_strix_halo.sh" | grep -q '118'
+@test "FIX: glob is outside quotes for proper expansion" {
+    # The glob must be outside quotes: "${INFRA_DIR}"/components/*.sh (not inside)
+    grep -q '"${INFRA_DIR}"/components/\*.sh' "$STRIX_DIR/provision_strix_halo.sh"
+}
+
+@test "FIX: INFRA_DIR uses dirname of script (not PWD)" {
+    grep -q 'dirname.*BASH_SOURCE' "$STRIX_DIR/provision_strix_halo.sh"
 }
 
 # --- SSH safety ---

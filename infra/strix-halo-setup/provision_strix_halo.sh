@@ -7,8 +7,8 @@
 set -eo pipefail
 
 # --- Global Configuration ---
-PROJECT_ROOT=$PWD 
-INFRA_DIR="${PROJECT_ROOT}/infra/strix-halo-setup"
+INFRA_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$INFRA_DIR/../.." && pwd)"
 KERNEL_VERSION="6.18.4"
 ROCM_VERSION="7.2"
 AI_USERS=("lmstudio" "comfyui" "claw" "hosting" "defense")
@@ -115,11 +115,10 @@ main() {
     confirm_execution
 
     # Load components
-    for component in "${INFRA_DIR}/components/*.sh"; do
-        echo source "$component"
+    for component in "${INFRA_DIR}"/components/*.sh; do
+        source "$component"
     done
 
-    echo "${COMPONENT_LIST[@]}"
     if [[ "$*" == *"--all"* ]]; then
         INSTALL_MODES=("${COMPONENT_LIST[@]}")
     else

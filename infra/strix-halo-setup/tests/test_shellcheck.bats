@@ -5,10 +5,10 @@ load helpers/test_helper
 
 STRIX="$STRIX_DIR"
 
-@test "shellcheck: provision_strix_halo.sh passes (excluding known bugs)" {
-    # SC2066: glob inside double quotes (known bug on line 118, tested in test_force_mode.bats)
+@test "shellcheck: provision_strix_halo.sh passes" {
+    # SC1090: can't follow non-constant source (expected for plugin framework)
     # SC2162: read without -r (cosmetic; backslash mangling irrelevant for confirmation prompts)
-    run shellcheck -s bash -e SC2086,SC2034,SC2155,SC2046,SC2044,SC2066,SC2162 "$STRIX/provision_strix_halo.sh"
+    run shellcheck -s bash -e SC2086,SC2034,SC2155,SC2046,SC2044,SC1090,SC2162 "$STRIX/provision_strix_halo.sh"
     echo "$output"
     [ "$status" -eq 0 ]
 }
