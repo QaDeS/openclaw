@@ -7,12 +7,12 @@
 set -eo pipefail
 
 # --- Global Configuration ---
-PROJECT_ROOT="/Projects/clawd/openclaw" 
+PROJECT_ROOT=$PWD 
 INFRA_DIR="${PROJECT_ROOT}/infra/strix-halo-setup"
 KERNEL_VERSION="6.18.4"
 ROCM_VERSION="7.2"
 AI_USERS=("lmstudio" "comfyui" "claw" "hosting" "defense")
-SHARED_MODEL_DIR="/opt/ai/models"
+SHARED_MODEL_DIR="/models"
 LM_STUDIO_URL="https://releases.lmstudio.ai/linux/x86_64/latest/LM-Studio.AppImage"
 ACE_STEP_MODEL_URL="https://huggingface.co/Linaqruf/ace-step-1.5-turbo-aio/resolve/main/ace_step_1.5_turbo_aio.safetensors"
 HSA_OVERRIDE="11.5.1"
@@ -115,10 +115,11 @@ main() {
     confirm_execution
 
     # Load components
-    for component in "${INFRA_DIR}/components/"*.sh; do
-        source "$component"
+    for component in "${INFRA_DIR}/components/*.sh"; do
+        echo source "$component"
     done
 
+    echo "${COMPONENT_LIST[@]}"
     if [[ "$*" == *"--all"* ]]; then
         INSTALL_MODES=("${COMPONENT_LIST[@]}")
     else
