@@ -5,9 +5,7 @@ import os
 
 # Scanners to run periodically
 SCANNERS = [
-    ["a2a-scanner", "scan-network"],
-    ["mcp-scanner", "scan-endpoints"],
-    ["skill-scanner", "audit-skills"],
+    ["mcp-scan", "scan"],
     ["audit-project-mutation"]
 ]
 
