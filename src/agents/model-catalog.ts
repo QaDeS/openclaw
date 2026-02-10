@@ -1,8 +1,7 @@
 import type { ModelDiscoverySource, DiscoveredModel } from "./discovery-types.js";
 import { type OpenClawConfig, loadConfig } from "../config/config.js";
 import { resolveOpenClawAgentDir } from "./agent-paths.js";
-import { LmStudioDiscoverySource } from "./lmstudio-discovery.js";
-import { resolveImplicitLmStudioProvider } from "./lmstudio.js";
+import { LocalDiscoverySource } from "./local-discovery.js";
 import { ensureOpenClawModelsJson } from "./models-config.js";
 
 export type ModelCatalogEntry = {
@@ -77,8 +76,8 @@ export async function loadModelCatalog(params?: {
             return entries as DiscoveredModel[];
           },
         },
-        // LM Studio (local models)
-        new LmStudioDiscoverySource(),
+        // Local LLM provider (LM Studio, llama.cpp, etc.)
+        new LocalDiscoverySource(),
       ];
 
       for (const source of sources) {

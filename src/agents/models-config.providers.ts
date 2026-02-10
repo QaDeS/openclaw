@@ -10,7 +10,7 @@ import {
   buildCloudflareAiGatewayModelDefinition,
   resolveCloudflareAiGatewayBaseUrl,
 } from "./cloudflare-ai-gateway.js";
-import { resolveImplicitLmStudioProvider } from "./lmstudio.js";
+import { resolveImplicitLocalProvider } from "./local-provider.js";
 import { resolveAwsSdkEnvVarName, resolveEnvApiKey } from "./model-auth.js";
 import {
   buildSyntheticModelDefinition,
@@ -451,19 +451,19 @@ export async function resolveImplicitProviders(params: {
     allowKeychainPrompt: false,
   });
 
-  // LM Studio provider (local API or file mode)
+  // Local LLM provider (local API or file mode)
   // Resolve from config and environment variables
   try {
     const config = params.config ?? loadConfig();
-    const lmstudioProvider = await resolveImplicitLmStudioProvider({
+    const localProvider = await resolveImplicitLocalProvider({
       config,
       env: process.env,
     });
-    if (lmstudioProvider) {
-      providers["lmstudio"] = lmstudioProvider;
+    if (localProvider) {
+      providers["local"] = localProvider;
     }
   } catch {
-    // Config loading or LM Studio resolution failed, skip
+    // Config loading or local provider resolution failed, skip
   }
 
   const minimaxKey =

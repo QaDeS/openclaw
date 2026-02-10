@@ -101,7 +101,7 @@ export async function applyAuthChoiceMiniMax(
     const applied = await applyDefaultModelChoice({
       config: nextConfig,
       setDefaultModel: params.setDefaultModel,
-      defaultModel: "lmstudio/minimax-m2.1-gs32",
+      defaultModel: "local/minimax-m2.1-gs32",
       applyDefaultConfig: applyMinimaxConfig,
       applyProviderConfig: applyMinimaxProviderConfig,
       noteAgentModel,

@@ -386,14 +386,14 @@ function buildLiveGatewayConfig(params: {
   providerOverrides?: Record<string, ModelProviderConfig>;
 }): OpenClawConfig {
   const providerOverrides = params.providerOverrides ?? {};
-  const lmstudioProvider = params.cfg.models?.providers?.lmstudio;
+  const localProvider = params.cfg.models?.providers?.local;
   const baseProviders = params.cfg.models?.providers ?? {};
   const nextProviders = {
     ...baseProviders,
-    ...(lmstudioProvider
+    ...(localProvider
       ? {
-          lmstudio: {
-            ...lmstudioProvider,
+          local: {
+            ...localProvider,
             api: "openai-completions",
           },
         }

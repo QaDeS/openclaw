@@ -210,7 +210,7 @@ describe("directive behavior", () => {
               models: {
                 "minimax/MiniMax-M2.1": {},
                 "minimax/MiniMax-M2.1-lightning": {},
-                "lmstudio/minimax-m2.1-gs32": {},
+                "local/minimax-m2.1-gs32": {},
               },
             },
           },
@@ -223,9 +223,9 @@ describe("directive behavior", () => {
                 api: "anthropic-messages",
                 models: [{ id: "MiniMax-M2.1", name: "MiniMax M2.1" }],
               },
-              lmstudio: {
+              local: {
                 baseUrl: "http://127.0.0.1:1234/v1",
-                apiKey: "lmstudio",
+                apiKey: "none",
                 api: "openai-responses",
                 models: [{ id: "minimax-m2.1-gs32", name: "MiniMax M2.1 GS32" }],
               },

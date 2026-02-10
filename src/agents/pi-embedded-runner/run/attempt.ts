@@ -523,11 +523,11 @@ export async function runEmbeddedAttempt(
         params.streamParams,
       );
 
-      // LM Studio / GGUF Runtime Injection
-      if (params.provider === "lmstudio") {
+      // Local LLM / GGUF Runtime Injection
+      if (params.provider === "local") {
         try {
           // Determine model path from config
-          const providerConfig = params.config?.models?.providers?.["lmstudio"];
+          const providerConfig = params.config?.models?.providers?.["local"];
 
           // Only perform local loading if we have a file:// baseUrl
           if (providerConfig?.baseUrl?.startsWith("file://")) {
@@ -536,13 +536,13 @@ export async function runEmbeddedAttempt(
             const modelPath = path.join(basePath, params.modelId);
 
             // Use Manager for caching
-            const { LmStudioModelManager } = await import("../../lmstudio-manager.js");
+            const { LocalModelManager } = await import("../../local-model-manager.js");
             if (typeof providerConfig.maxCachedModels === "number") {
-              LmStudioModelManager.getInstance().configure({
+              LocalModelManager.getInstance().configure({
                 maxCachedModels: providerConfig.maxCachedModels,
               });
             }
-            const model = await LmStudioModelManager.getInstance().getModel(modelPath);
+            const model = await LocalModelManager.getInstance().getModel(modelPath);
 
             // Dynamic import for types/classes needed for session creation
             // Cast to any to avoid TypeScript issues with dynamic ESM import resolution
@@ -596,7 +596,7 @@ export async function runEmbeddedAttempt(
           }
         } catch (error: unknown) {
           log.error(
-            "Failed to initialize lmstudio provider local mode",
+            "Failed to initialize local provider file mode",
             error as Record<string, unknown>,
           );
           throw error;

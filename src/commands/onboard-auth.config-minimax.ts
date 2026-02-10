@@ -9,7 +9,7 @@ import {
   MINIMAX_HOSTED_COST,
   MINIMAX_HOSTED_MODEL_ID,
   MINIMAX_HOSTED_MODEL_REF,
-  MINIMAX_LM_STUDIO_COST,
+  MINIMAX_LOCAL_COST,
 } from "./onboard-auth.models.js";
 
 export function applyMinimaxProviderConfig(cfg: OpenClawConfig): OpenClawConfig {
@@ -18,23 +18,23 @@ export function applyMinimaxProviderConfig(cfg: OpenClawConfig): OpenClawConfig 
     ...models["anthropic/claude-opus-4-6"],
     alias: models["anthropic/claude-opus-4-6"]?.alias ?? "Opus",
   };
-  models["lmstudio/minimax-m2.1-gs32"] = {
-    ...models["lmstudio/minimax-m2.1-gs32"],
-    alias: models["lmstudio/minimax-m2.1-gs32"]?.alias ?? "Minimax",
+  models["local/minimax-m2.1-gs32"] = {
+    ...models["local/minimax-m2.1-gs32"],
+    alias: models["local/minimax-m2.1-gs32"]?.alias ?? "Minimax",
   };
 
   const providers = { ...cfg.models?.providers };
-  if (!providers.lmstudio) {
-    providers.lmstudio = {
+  if (!providers.local) {
+    providers.local = {
       baseUrl: "http://127.0.0.1:1234/v1",
-      apiKey: "lmstudio",
+      apiKey: "none",
       api: "openai-responses",
       models: [
         buildMinimaxModelDefinition({
           id: "minimax-m2.1-gs32",
           name: "MiniMax M2.1 GS32",
           reasoning: false,
-          cost: MINIMAX_LM_STUDIO_COST,
+          cost: MINIMAX_LOCAL_COST,
           contextWindow: 196608,
           maxTokens: 8192,
         }),
@@ -118,7 +118,7 @@ export function applyMinimaxConfig(cfg: OpenClawConfig): OpenClawConfig {
                 fallbacks: (next.agents.defaults.model as { fallbacks?: string[] }).fallbacks,
               }
             : undefined),
-          primary: "lmstudio/minimax-m2.1-gs32",
+          primary: "local/minimax-m2.1-gs32",
         },
       },
     },

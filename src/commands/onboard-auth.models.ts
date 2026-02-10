@@ -33,7 +33,7 @@ export const MINIMAX_HOSTED_COST = {
   cacheRead: 0,
   cacheWrite: 0,
 };
-export const MINIMAX_LM_STUDIO_COST = {
+export const MINIMAX_LOCAL_COST = {
   input: 0,
   output: 0,
   cacheRead: 0,

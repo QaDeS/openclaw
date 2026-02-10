@@ -26,7 +26,7 @@ export const modelsHandlers: GatewayRequestHandlers = {
       respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(err)));
     }
   },
-  "models.lmstudio.unload": async ({ params, respond }) => {
+  "models.local.unload": async ({ params, respond }) => {
     const modelPath = typeof params.modelPath === "string" ? params.modelPath : undefined;
     const all = params.all === true;
 
@@ -40,8 +40,8 @@ export const modelsHandlers: GatewayRequestHandlers = {
     }
 
     try {
-      const { LmStudioModelManager } = await import("../../agents/lmstudio-manager.js");
-      const manager = LmStudioModelManager.getInstance();
+      const { LocalModelManager } = await import("../../agents/local-model-manager.js");
+      const manager = LocalModelManager.getInstance();
       if (all) {
         await manager.clearCache();
         respond(true, { message: "All local models unloaded" }, undefined);

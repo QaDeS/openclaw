@@ -144,9 +144,9 @@ const AUTH_CHOICE_GROUP_DEFS: {
   },
   {
     value: "local",
-    label: "Local",
-    hint: "LM Studio",
-    choices: ["lmstudio"],
+    label: "Local LLM",
+    hint: "LM Studio, llama.cpp, or compatible server",
+    choices: ["local"],
   },
 ];
 
@@ -240,9 +240,9 @@ export function buildAuthChoiceOptions(params: {
   });
   options.push({ value: "minimax-api", label: "MiniMax M2.1" });
   options.push({
-    value: "lmstudio",
-    label: "LM Studio",
-    hint: "Connect to local LM Studio server",
+    value: "local",
+    label: "Local LLM",
+    hint: "Connect to local LLM server (LM Studio, llama.cpp, etc.)",
   });
   options.push({
     value: "minimax-api-lightning",

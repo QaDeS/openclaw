@@ -78,7 +78,7 @@ describe("directive behavior", () => {
               models: {
                 "anthropic/claude-opus-4-5": {},
                 "moonshot/kimi-k2-0905-preview": { alias: "Kimi" },
-                "lmstudio/kimi-k2-0905-preview": {},
+                "local/kimi-k2-0905-preview": {},
               },
             },
           },
@@ -91,9 +91,9 @@ describe("directive behavior", () => {
                 api: "openai-completions",
                 models: [{ id: "kimi-k2-0905-preview", name: "Kimi K2" }],
               },
-              lmstudio: {
+              local: {
                 baseUrl: "http://127.0.0.1:1234/v1",
-                apiKey: "lmstudio",
+                apiKey: "none",
                 api: "openai-responses",
                 models: [{ id: "kimi-k2-0905-preview", name: "Kimi K2 (Local)" }],
               },

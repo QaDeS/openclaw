@@ -24,7 +24,7 @@ const MODEL_PICK_PROVIDER_PREFERENCE = [
   "cerebras",
   "mistral",
   "xai",
-  "lmstudio",
+  "local",
 ] as const;
 
 const PROVIDER_RANK = new Map<string, number>(

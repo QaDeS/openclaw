@@ -209,8 +209,8 @@ export async function resolveApiKeyForProvider(params: {
     return resolveAwsSdkAuthInfo();
   }
 
-  // Local providers (lmstudio, ollama) can work without API keys
-  if (normalized === "lmstudio" || normalized === "ollama") {
+  // Local providers (local, ollama) can work without API keys
+  if (normalized === "local" || normalized === "ollama") {
     return { apiKey: undefined, source: "local", mode: "api-key" };
   }
 
@@ -289,8 +289,8 @@ export function resolveEnvApiKey(provider: string): EnvApiKeyResult | null {
     return pick("KIMI_API_KEY") ?? pick("KIMICODE_API_KEY");
   }
 
-  if (normalized === "lmstudio") {
-    return pick("LM_STUDIO_TOKEN") ?? pick("LMSTUDIO_API_KEY");
+  if (normalized === "local") {
+    return pick("LOCAL_LLM_TOKEN");
   }
 
   const envMap: Record<string, string> = {
