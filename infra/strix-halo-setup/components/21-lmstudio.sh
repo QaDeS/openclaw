@@ -16,6 +16,8 @@ install_lmstudio() {
         sudo -u lmstudio mkdir -p /home/lmstudio/.cache/lm-studio
         sudo -u lmstudio ln -sf ${SHARED_MODEL_DIR} /home/lmstudio/.cache/lm-studio/models
     fi
+    run cp ${INFRA_DIR}/systemd/llmster.service /etc/systemd/system/llmster.service
+    run systemctl daemon-reload
     run systemctl enable llmster
     set_local_llm_url "http://localhost:1234/v1"
 }

@@ -15,6 +15,8 @@ install_cisco_defense() {
         sudo -u defense /home/defense/.local/bin/uv --no-config tool install mcp-scanner --python 3.11
         sudo -u defense /home/defense/.local/bin/uv --no-config tool install skill-scanner --python 3.11
     fi
+    run cp ${INFRA_DIR}/systemd/cisco-defense.service /etc/systemd/system/cisco-defense.service
+    run systemctl daemon-reload
     run systemctl enable cisco-defense
 }
 
@@ -29,6 +31,8 @@ install_hosting_stack() {
     run sudo -u hosting mkdir -p /home/hosting/hosting-stack
     run cp ${INFRA_DIR}/docker/hosting-compose.yml /home/hosting/hosting-stack/docker-compose.yml
     run chown hosting:hosting /home/hosting/hosting-stack/docker-compose.yml
+    run cp ${INFRA_DIR}/systemd/hosting.service /etc/systemd/system/hosting.service
+    run systemctl daemon-reload
     run systemctl enable hosting
 
     if [ "$DRY_RUN" = false ]; then

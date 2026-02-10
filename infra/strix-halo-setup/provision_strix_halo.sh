@@ -99,17 +99,18 @@ confirm_execution() {
 
 # --- System State Detection ---
 # Returns 0 (true) if a component appears to be already installed.
+# For components with systemd services, also verifies the service is enabled.
 is_installed() {
     local id=$1
     case "$id" in
         BASE)      ls -d /opt/rocm-${ROCM_VERSION}* >/dev/null 2>&1 ;;
-        OPENCLAW)  [ -f /home/claw/openclaw-compose.yml ] ;;
-        LMSTUDIO)  [ -f /home/lmstudio/.lmstudio/bin/lms ] ;;
-        LLAMACPP)  [ -x /home/llamacpp/llama.cpp/build/bin/llama-server ] ;;
-        COMFYUI)   [ -d /home/comfyui/ComfyUI ] ;;
+        OPENCLAW)  [ -f /home/claw/openclaw-compose.yml ] && systemctl is-enabled openclaw >/dev/null 2>&1 ;;
+        LMSTUDIO)  [ -f /home/lmstudio/.lmstudio/bin/lms ] && systemctl is-enabled llmster >/dev/null 2>&1 ;;
+        LLAMACPP)  [ -x /home/llamacpp/llama.cpp/build/bin/llama-server ] && systemctl is-enabled llamacpp >/dev/null 2>&1 ;;
+        COMFYUI)   [ -d /home/comfyui/ComfyUI ] && systemctl is-enabled comfyui >/dev/null 2>&1 ;;
         ZIMAGE)    [ -d /home/comfyui/ComfyUI ] && /home/comfyui/.local/bin/uv --no-config pip show accelerate >/dev/null 2>&1 ;;
-        ACE_STEP)  [ -d /home/comfyui/ACE-Step-1.5 ] ;;
-        SECURITY)  [ -f /home/defense/cisco-defense-daemon.py ] ;;
+        ACE_STEP)  [ -d /home/comfyui/ACE-Step-1.5 ] && systemctl is-enabled ace-step >/dev/null 2>&1 ;;
+        SECURITY)  [ -f /home/defense/cisco-defense-daemon.py ] && systemctl is-enabled cisco-defense >/dev/null 2>&1 && systemctl is-enabled hosting >/dev/null 2>&1 ;;
         *)         return 1 ;;
     esac
 }

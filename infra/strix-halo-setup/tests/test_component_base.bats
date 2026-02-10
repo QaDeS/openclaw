@@ -106,16 +106,9 @@ teardown() {
     [ "$_status" -eq 0 ]
 }
 
-@test "base: deploy_base_config would copy systemd units" {
+@test "base: deploy_base_config would enable xrdp" {
     DRY_RUN=true
     capture deploy_base_config
-    [[ "$_output" == *"cp"*".service"* ]]
-}
-
-@test "base: deploy_base_config would reload and enable xrdp" {
-    DRY_RUN=true
-    capture deploy_base_config
-    [[ "$_output" == *"systemctl"*"daemon-reload"* ]]
     [[ "$_output" == *"systemctl"*"enable"*"xrdp"* ]]
 }
 

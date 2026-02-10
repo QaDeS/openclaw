@@ -29,6 +29,8 @@ install_openclaw_stack() {
         } | tee /home/claw/.openclaw/docker.env > /dev/null
         chown claw:claw /home/claw/.openclaw/docker.env
     fi
+    run cp ${INFRA_DIR}/systemd/openclaw.service /etc/systemd/system/openclaw.service
+    run systemctl daemon-reload
     run systemctl enable openclaw
 }
 

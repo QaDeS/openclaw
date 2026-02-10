@@ -92,9 +92,7 @@ setup_shared_dirs() {
 }
 
 deploy_base_config() {
-    log "Deploying systemd units and configurations..."
-    run cp ${INFRA_DIR}/systemd/*.service /etc/systemd/system/
-    run systemctl daemon-reload
+    log "Deploying base configurations..."
 
     # Dummy Xorg for GFX1151
     if [ "$DRY_RUN" = false ]; then

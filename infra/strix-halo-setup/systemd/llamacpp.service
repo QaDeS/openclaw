@@ -1,16 +1,38 @@
 [Unit]
 Description=llama.cpp Server (Vulkan)
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=llamacpp
-Environment=HOME=/home/llamacpp
+Group=llamacpp
+
 ExecStart=/home/llamacpp/llama.cpp/build/bin/llama-server \
-    --host 0.0.0.0 --port 11234 \
-    --model /home/llamacpp/models/default.gguf
-Restart=on-failure
-RestartSec=10
+    --models-dir /home/llamacpp/models \
+    --host 0.0.0.0 \
+    --port 11234 \
+    -ngl 99 \
+    -fa on \
+    -c 204800
+
+Restart=always
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+# Environment
+Environment=GGML_VK_VISIBLE_DEVICES=0
+
+# Hardening
+NoNewPrivileges=true
+ProtectHome=read-only
+ReadOnlyPaths=/models
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=llamacpp
 
 [Install]
 WantedBy=multi-user.target

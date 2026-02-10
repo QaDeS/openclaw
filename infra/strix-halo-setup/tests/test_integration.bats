@@ -118,6 +118,19 @@ teardown() {
     done
 }
 
+@test "integration: every systemd service is deployed by its own component (not base)" {
+    local non_base_components
+    non_base_components=$(cat "$STRIX_DIR"/components/[2-9]*.sh)
+    for service_file in "$STRIX_DIR"/systemd/*.service; do
+        local service_name
+        service_name=$(basename "$service_file" .service)
+        echo "$non_base_components" | grep -q "cp.*${service_name}.service.*/etc/systemd/system/" || {
+            echo "No component deploys service file: $service_name"
+            return 1
+        }
+    done
+}
+
 @test "integration: every systemd user has an ensure_user call in components" {
     local all_components
     all_components=$(cat "$STRIX_DIR"/components/*.sh)

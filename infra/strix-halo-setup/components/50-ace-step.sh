@@ -63,6 +63,8 @@ install_ace_step() {
         sudo -u comfyui ln -sfn "${SHARED_MODEL_DIR}" "${ACE_STEP_HOME}/checkpoints"
     fi
 
+    run cp ${INFRA_DIR}/systemd/ace-step.service /etc/systemd/system/ace-step.service
+    run systemctl daemon-reload
     run systemctl enable ace-step
 }
 
