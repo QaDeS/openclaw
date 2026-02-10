@@ -56,6 +56,8 @@ setup_mocks() {
     _install_mock xrdp
     _install_mock git
     _install_mock mkdir
+    _install_mock ln
+    _install_mock uv
 
     # Make getent return a fake home for testuser
     cat > "$MOCK_BIN/getent" <<'MOCK'
@@ -91,7 +93,7 @@ echo "Mem:            128           8          96           1          24       
 MOCK
     $_REAL_CHMOD +x "$MOCK_BIN/free"
 
-    # Make sudo pass through to the command (dropping -u <user>)
+    # Make sudo pass through to mocked commands (dropping -u <user>)
     cat > "$MOCK_BIN/sudo" <<'MOCK'
 #!/bin/bash
 echo "mock_sudo $*" >> "$MOCK_LOG"
@@ -102,7 +104,10 @@ while [[ $# -gt 0 ]]; do
         *)  break ;;
     esac
 done
-"$@"
+# Pass through if command exists (e.g. mocked in MOCK_BIN), otherwise no-op
+if [[ $# -gt 0 ]] && command -v "$1" &>/dev/null; then
+    "$@"
+fi
 MOCK
     $_REAL_CHMOD +x "$MOCK_BIN/sudo"
 
