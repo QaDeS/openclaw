@@ -1,0 +1,9 @@
+FROM node:22-slim
+
+RUN npm install -g pnpm
+
+WORKDIR /app
+
+# Source is volume-mounted at runtime; deps pre-installed on host.
+# Rebuild only when Dockerfile changes (runtime comes from the image).
+CMD ["pnpm", "openclaw", "gateway", "run", "--bind", "loopback", "--port", "18789", "--force"]

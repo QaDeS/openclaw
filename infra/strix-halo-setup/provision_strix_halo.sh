@@ -58,7 +58,7 @@ ensure_user() {
 set_local_llm_url() {
     local url=$1
     LOCAL_LLM_URL="$url"
-    local env_file="/home/claw/.openclaw/docker.env"
+    local env_file="/home/claw/.openclaw/env"
     if [ -f "$env_file" ]; then
         sed -i "s|^LOCAL_LLM_URL=.*|LOCAL_LLM_URL=${url}|" "$env_file"
         log "Updated LOCAL_LLM_URL → ${url}"
@@ -104,7 +104,7 @@ is_installed() {
     local id=$1
     case "$id" in
         BASE)      ls -d /opt/rocm-${ROCM_VERSION}* >/dev/null 2>&1 ;;
-        OPENCLAW)  [ -f /home/claw/openclaw-compose.yml ] && systemctl is-enabled openclaw >/dev/null 2>&1 ;;
+        OPENCLAW)  [ -d /home/claw/openclaw/.git ] && systemctl is-enabled openclaw >/dev/null 2>&1 ;;
         LMSTUDIO)  [ -f /home/lmstudio/.lmstudio/bin/lms ] && systemctl is-enabled llmster >/dev/null 2>&1 ;;
         LLAMACPP)  [ -x /home/llamacpp/llama.cpp/build/bin/llama-server ] && systemctl is-enabled llamacpp >/dev/null 2>&1 ;;
         SYNC_LLAMA) [ -x /usr/local/bin/sync-llama-models.sh ] && systemctl is-enabled sync-llama-models >/dev/null 2>&1 ;;
