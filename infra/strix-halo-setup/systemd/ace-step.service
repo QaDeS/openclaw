@@ -1,0 +1,22 @@
+[Unit]
+Description=ACE Step 1.5 Music Generation Server
+After=network.target rocm.target
+
+[Service]
+User=comfyui
+WorkingDirectory=/home/comfyui/ACE-Step-1.5
+ExecStart=/home/comfyui/ACE-Step-1.5/venv_rocm/bin/python -u acestep/acestep_v15_pipeline.py --port 7860 --server-name 0.0.0.0 --backend pt --cpu_offload true
+# Force PyTorch backend — bypass nano-vllm which needs CUDA-specific triton
+Environment=ACESTEP_LM_BACKEND=pt
+# Disable torch.compile — triton/inductor not reliable on ROCm GFX1151
+Environment=TORCH_COMPILE_BACKEND=eager
+# MIOpen tuning for faster first-run kernel selection
+Environment=MIOPEN_FIND_MODE=FAST
+# Strix Halo GFX1151 GPU override
+Environment=HSA_OVERRIDE_GFX_VERSION=11.5.1
+Environment=PYTORCH_ALLOC_CONF=expandable_segments:True
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
