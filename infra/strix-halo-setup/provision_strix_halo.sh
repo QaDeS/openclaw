@@ -107,6 +107,7 @@ is_installed() {
         OPENCLAW)  [ -f /home/claw/openclaw-compose.yml ] && systemctl is-enabled openclaw >/dev/null 2>&1 ;;
         LMSTUDIO)  [ -f /home/lmstudio/.lmstudio/bin/lms ] && systemctl is-enabled llmster >/dev/null 2>&1 ;;
         LLAMACPP)  [ -x /home/llamacpp/llama.cpp/build/bin/llama-server ] && systemctl is-enabled llamacpp >/dev/null 2>&1 ;;
+        SYNC_LLAMA) [ -x /usr/local/bin/sync-llama-models.sh ] && systemctl is-enabled sync-llama-models >/dev/null 2>&1 ;;
         COMFYUI)   [ -d /home/comfyui/ComfyUI ] && systemctl is-enabled comfyui >/dev/null 2>&1 ;;
         ZIMAGE)    [ -d /home/comfyui/ComfyUI ] && /home/comfyui/.local/bin/uv --no-config pip show accelerate >/dev/null 2>&1 ;;
         ACE_STEP)  [ -d /home/comfyui/ACE-Step-1.5 ] && systemctl is-enabled ace-step >/dev/null 2>&1 ;;
@@ -157,7 +158,9 @@ show_menu() {
             "")
                 # Confirm current selection
                 for id in "${COMPONENT_LIST[@]}"; do
-                    ${selected[$id]} && INSTALL_MODES+=("$id")
+                    if ${selected[$id]}; then
+                        INSTALL_MODES+=("$id")
+                    fi
                 done
                 return
                 ;;

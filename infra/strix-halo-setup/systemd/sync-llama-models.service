@@ -1,0 +1,21 @@
+[Unit]
+Description=Sync /models to flat /llama_models for llama.cpp
+After=local-fs.target
+Before=llamacpp.service
+Wants=llamacpp.service
+
+[Service]
+Type=simple
+ExecStartPre=/usr/local/bin/sync-llama-models.sh
+ExecStart=/usr/local/bin/sync-llama-models.sh --watch
+
+Restart=always
+RestartSec=10
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=sync-llama-models
+
+[Install]
+WantedBy=multi-user.target

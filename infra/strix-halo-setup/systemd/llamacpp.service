@@ -9,7 +9,7 @@ User=llamacpp
 Group=llamacpp
 
 ExecStart=/home/llamacpp/llama.cpp/build/bin/llama-server \
-    --models-dir /home/llamacpp/models \
+    --models-dir /llama_models \
     --host 0.0.0.0 \
     --port 11234 \
     -ngl 99 \
@@ -27,7 +27,7 @@ Environment=GGML_VK_VISIBLE_DEVICES=0
 # Hardening
 NoNewPrivileges=true
 ProtectHome=read-only
-ReadOnlyPaths=/models
+ReadOnlyPaths=/models /llama_models
 
 # Logging
 StandardOutput=journal

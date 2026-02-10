@@ -35,10 +35,14 @@ SYSTEMD_DIR="$STRIX_DIR/systemd"
     [ -f "$SYSTEMD_DIR/llamacpp.service" ]
 }
 
-@test "systemd: exactly 7 service units exist" {
+@test "systemd: sync-llama-models.service exists" {
+    [ -f "$SYSTEMD_DIR/sync-llama-models.service" ]
+}
+
+@test "systemd: exactly 8 service units exist" {
     local count
     count=$(ls "$SYSTEMD_DIR"/*.service 2>/dev/null | wc -l)
-    [ "$count" -eq 7 ]
+    [ "$count" -eq 8 ]
 }
 
 # --- Required sections ---
@@ -101,8 +105,8 @@ SYSTEMD_DIR="$STRIX_DIR/systemd"
     grep -q "\-\-port 11234" "$SYSTEMD_DIR/llamacpp.service"
 }
 
-@test "systemd: llamacpp.service has Restart=on-failure" {
-    grep -q "^Restart=on-failure" "$SYSTEMD_DIR/llamacpp.service"
+@test "systemd: llamacpp.service has Restart=always" {
+    grep -q "^Restart=always" "$SYSTEMD_DIR/llamacpp.service"
 }
 
 @test "systemd: comfyui.service runs as comfyui user" {
@@ -155,8 +159,8 @@ SYSTEMD_DIR="$STRIX_DIR/systemd"
     done
 }
 
-@test "systemd: llmster.service has RestartSec=10" {
-    grep -q "^RestartSec=10" "$SYSTEMD_DIR/llmster.service"
+@test "systemd: llmster.service is type oneshot (no RestartSec)" {
+    grep -q "^Type=oneshot" "$SYSTEMD_DIR/llmster.service"
 }
 
 @test "systemd: cisco-defense.service has RestartSec=30" {
@@ -246,4 +250,32 @@ SYSTEMD_DIR="$STRIX_DIR/systemd"
 
 @test "systemd: ace-step.service enables cpu_offload" {
     grep -q "\-\-cpu_offload true" "$SYSTEMD_DIR/ace-step.service"
+}
+
+# --- llamacpp uses /llama_models ---
+
+@test "systemd: llamacpp.service uses /llama_models models-dir" {
+    grep -q "\-\-models-dir /llama_models" "$SYSTEMD_DIR/llamacpp.service"
+}
+
+@test "systemd: llamacpp.service has ReadOnlyPaths for /llama_models" {
+    grep -q "/llama_models" "$SYSTEMD_DIR/llamacpp.service"
+}
+
+# --- sync-llama-models service ---
+
+@test "systemd: sync-llama-models.service runs sync script" {
+    grep -q "ExecStart=.*/sync-llama-models.sh --watch" "$SYSTEMD_DIR/sync-llama-models.service"
+}
+
+@test "systemd: sync-llama-models.service does initial sync via ExecStartPre" {
+    grep -q "ExecStartPre=.*/sync-llama-models.sh" "$SYSTEMD_DIR/sync-llama-models.service"
+}
+
+@test "systemd: sync-llama-models.service orders Before=llamacpp" {
+    grep -q "Before=llamacpp.service" "$SYSTEMD_DIR/sync-llama-models.service"
+}
+
+@test "systemd: sync-llama-models.service has Restart=always" {
+    grep -q "^Restart=always" "$SYSTEMD_DIR/sync-llama-models.service"
 }

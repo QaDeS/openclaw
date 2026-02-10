@@ -30,10 +30,10 @@ install_llamacpp() {
         sudo -u llamacpp cmake --build "$repo_dir/build" --config Release -j "$(nproc)"
     fi
 
-    # Symlink shared models
+    # Symlink shared models (for direct access)
     run sudo -u llamacpp ln -sf ${SHARED_MODEL_DIR} /home/llamacpp/models
 
-    # Install systemd service
+    # Install systemd service (uses /llama_models from sync-llama-models component)
     run cp ${INFRA_DIR}/systemd/llamacpp.service /etc/systemd/system/llamacpp.service
     run systemctl daemon-reload
     run systemctl enable llamacpp

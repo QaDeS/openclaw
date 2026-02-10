@@ -121,6 +121,12 @@ teardown() {
     grep -q 'dirname.*BASH_SOURCE' "$STRIX_DIR/provision_strix_halo.sh"
 }
 
+@test "FIX: menu selection uses if/then (not && which breaks set -e)" {
+    # The pattern `\${selected[\$id]} && INSTALL_MODES+=(...)` kills the script
+    # under set -e when the last component is unselected. Must use if/then.
+    ! grep -q 'selected\[.*\]\} && INSTALL_MODES' "$STRIX_DIR/provision_strix_halo.sh"
+}
+
 # --- SSH safety ---
 
 @test "check_ssh_safety: script contains lockout protection" {
@@ -167,8 +173,8 @@ teardown() {
     done
 }
 
-@test "exactly 8 component scripts exist" {
+@test "exactly 9 component scripts exist" {
     local count
     count=$(ls "$STRIX_DIR"/components/*.sh 2>/dev/null | wc -l)
-    [ "$count" -eq 8 ]
+    [ "$count" -eq 9 ]
 }

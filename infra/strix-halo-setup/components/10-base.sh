@@ -5,7 +5,13 @@
 
 install_base() {
     log "System update and kernel upgrade..."
-    run apt update && run apt upgrade -y
+    run apt update
+    # Skip full upgrade when ROCm is already installed to avoid apt removing/churning SDK packages
+    if [ "$REDOWNLOAD" = false ] && ls -d /opt/rocm-${ROCM_VERSION}* >/dev/null 2>&1; then
+        log "ROCm ${ROCM_VERSION} present — skipping apt upgrade to avoid SDK package churn."
+    else
+        run apt upgrade -y
+    fi
     if ! command -v mainline &> /dev/null; then
         run add-apt-repository ppa:cappelikan/ppa -y
         run apt update && run apt install mainline -y

@@ -14,7 +14,7 @@ teardown() {
 
 # --- All components load without error ---
 
-@test "integration: all 8 components source without error" {
+@test "integration: all 9 components source without error" {
     for f in "$STRIX_DIR"/components/*.sh; do
         source "$f"
     done
@@ -22,19 +22,19 @@ teardown() {
     [ ${#COMPONENT_LIST[@]} -ge 1 ]
 }
 
-@test "integration: after sourcing all components, COMPONENT_LIST has 8 entries" {
+@test "integration: after sourcing all components, COMPONENT_LIST has 9 entries" {
     for f in "$STRIX_DIR"/components/*.sh; do
         source "$f"
     done
     echo "COMPONENT_LIST: ${COMPONENT_LIST[*]}"
-    [ ${#COMPONENT_LIST[@]} -eq 8 ]
+    [ ${#COMPONENT_LIST[@]} -eq 9 ]
 }
 
 @test "integration: after sourcing all components, expected IDs are registered" {
     for f in "$STRIX_DIR"/components/*.sh; do
         source "$f"
     done
-    for expected in BASE OPENCLAW LMSTUDIO LLAMACPP COMFYUI ZIMAGE ACE_STEP SECURITY; do
+    for expected in BASE OPENCLAW LMSTUDIO LLAMACPP SYNC_LLAMA COMFYUI ZIMAGE ACE_STEP SECURITY; do
         [[ " ${COMPONENT_LIST[*]} " == *" $expected "* ]] || {
             echo "Missing component: $expected"
             return 1

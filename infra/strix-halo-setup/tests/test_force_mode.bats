@@ -109,14 +109,14 @@ teardown() {
 
 # --- End-to-end simulation of the fixed flow ---
 
-@test "FIXED-FLOW: correct loading sources all 6 components" {
+@test "FIXED-FLOW: correct loading sources all 9 components" {
     local loaded=0
     for component in "${STRIX_DIR}"/components/*.sh; do
         source "$component"
         loaded=$((loaded + 1))
     done
-    [ "$loaded" -eq 6 ]
-    [ ${#COMPONENT_LIST[@]} -eq 6 ]
+    [ "$loaded" -eq 9 ]
+    [ ${#COMPONENT_LIST[@]} -eq 9 ]
 }
 
 @test "FIXED-FLOW: with --all, INSTALL_MODES matches COMPONENT_LIST" {
@@ -124,7 +124,7 @@ teardown() {
         source "$component"
     done
     INSTALL_MODES=("${COMPONENT_LIST[@]}")
-    [ ${#INSTALL_MODES[@]} -eq 6 ]
+    [ ${#INSTALL_MODES[@]} -eq 9 ]
 }
 
 @test "FIXED-FLOW: all component functions execute in dry-run" {
@@ -145,6 +145,42 @@ teardown() {
             executed=$((executed + 1))
         done
     done
-    # BASE(3) + LLM(1) + COMFYUI(1) + ZIMAGE(1) + ACE_STEP(1) + SECURITY(3) = 10
-    [ "$executed" -eq 10 ]
+    # BASE(3) + OPENCLAW(1) + LMSTUDIO(1) + LLAMACPP(1) + SYNC_LLAMA(1) + COMFYUI(1) + ZIMAGE(1) + ACE_STEP(1) + SECURITY(3) = 13
+    [ "$executed" -eq 13 ]
+}
+
+# --- Regression: set -e vs menu selection ---
+
+@test "BUG-FIX: partial selection does not exit due to set -e on false && expr" {
+    # When only a MIDDLE component is selected (not the last), the old code used:
+    #   ${selected[$id]} && INSTALL_MODES+=("$id")
+    # The last iteration evaluated `false && ...` returning 1, and set -e killed the script.
+    # Fixed by using `if ${selected[$id]}; then ... fi` instead.
+    set -e
+    for component in "${STRIX_DIR}"/components/*.sh; do
+        source "$component"
+    done
+
+    # Simulate: only select the FIRST component (all others unselected → last is false)
+    declare -A selected
+    local first=true
+    for id in "${COMPONENT_LIST[@]}"; do
+        if $first; then
+            selected["$id"]=true
+            first=false
+        else
+            selected["$id"]=false
+        fi
+    done
+
+    # This is the fixed pattern (if/then instead of &&)
+    INSTALL_MODES=()
+    for id in "${COMPONENT_LIST[@]}"; do
+        if ${selected[$id]}; then
+            INSTALL_MODES+=("$id")
+        fi
+    done
+
+    [ ${#INSTALL_MODES[@]} -eq 1 ]
+    [ "${INSTALL_MODES[0]}" = "BASE" ]
 }

@@ -120,6 +120,7 @@ MOCK
     $_REAL_LN -sf "$STRIX_DIR/systemd"    "$PROJECT_ROOT/infra/strix-halo-setup/systemd"
     $_REAL_LN -sf "$STRIX_DIR/docker"     "$PROJECT_ROOT/infra/strix-halo-setup/docker"
     $_REAL_LN -sf "$STRIX_DIR/defense"    "$PROJECT_ROOT/infra/strix-halo-setup/defense"
+    $_REAL_LN -sf "$STRIX_DIR/scripts"   "$PROJECT_ROOT/infra/strix-halo-setup/scripts"
 }
 
 teardown_mocks() {
