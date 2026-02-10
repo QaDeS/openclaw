@@ -196,6 +196,9 @@ show_menu() {
 }
 
 show_help() {
+    local host
+    host=$(hostname 2>/dev/null || echo "<hostname>")
+
     cat <<HELPEOF
 Usage: sudo ./provision_strix_halo.sh [OPTIONS]
 
@@ -211,6 +214,18 @@ HELPEOF
     for id in "${COMPONENT_LIST[@]}"; do
         printf "  %-12s %s\n" "$id" "${COMPONENT_NAMES[$id]}"
     done
+
+    cat <<URLEOF
+
+Access URLs (once provisioned, use ${host} from your laptop):
+  RDP Desktop        ssh -L 3389:localhost:3389 ${host}  ->  rdp://localhost:3389
+  LM Studio API      http://${host}:1234/v1
+  llama.cpp API      http://${host}:11234/v1
+  llama.cpp UI       http://${host}:11234
+  ComfyUI            http://${host}:8188
+  ACE Step (Music)   http://${host}:7860
+  WordPress          http://${host}:8080
+URLEOF
     exit 0
 }
 

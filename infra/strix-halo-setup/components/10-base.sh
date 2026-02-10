@@ -100,30 +100,22 @@ setup_shared_dirs() {
 deploy_base_config() {
     log "Deploying base configurations..."
 
-    # Dummy Xorg for GFX1151
+    # Graphical desktop (HDMI auto-detected) + xrdp for headless remote access
     if [ "$DRY_RUN" = false ]; then
-        apt install -y xrdp xserver-xorg-video-dummy
-        cat <<EOF > /etc/X11/xorg.conf.d/70-dummy.conf
-Section "Device"
-    Identifier  "GFX1151"
-    Driver      "dummy"
-    VideoRam    1024000
-EndSection
-Section "Screen"
-    Identifier  "Default Screen"
-    Device      "GFX1151"
-    DefaultDepth 24
-    SubSection "Display"
-        Depth 24
-        Modes "3840x2160"
-    EndSubSection
-EndSection
-EOF
+        apt install -y xorg xserver-xorg-video-amdgpu xfce4 lightdm \
+                       xrdp xvfb
+        # Remove any forced driver config — let Xorg auto-detect hardware.
+        # HDMI connected → amdgpu picked up automatically → lightdm serves desktop.
+        # No HDMI → Xorg finds no screens → lightdm stops → xrdp still works (Xvnc).
+        rm -f /etc/X11/xorg.conf.d/70-dummy.conf \
+              /etc/X11/xorg.conf.d/70-amdgpu.conf
     fi
+
     # Bind xrdp to localhost only — access via SSH tunnel (key-gated)
     if [ "$DRY_RUN" = false ]; then
         sed -i 's/^port=.*/port=tcp:\/\/127.0.0.1:3389/' /etc/xrdp/xrdp.ini
     fi
+    run systemctl enable lightdm
     run systemctl enable xrdp
     run systemctl restart xrdp
 }
