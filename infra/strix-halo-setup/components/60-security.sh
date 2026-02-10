@@ -11,9 +11,9 @@ install_cisco_defense() {
     if [ "$DRY_RUN" = false ]; then
         sudo -u defense bash -c "curl -LsSf https://astral.sh/uv/install.sh | sh"
         # Use uv to install scanners as tools
-        sudo -u defense /home/defense/.local/bin/uv tool install a2a-scanner --python 3.11
-        sudo -u defense /home/defense/.local/bin/uv tool install mcp-scanner --python 3.11
-        sudo -u defense /home/defense/.local/bin/uv tool install skill-scanner --python 3.11
+        sudo -u defense /home/defense/.local/bin/uv --no-config tool install a2a-scanner --python 3.11
+        sudo -u defense /home/defense/.local/bin/uv --no-config tool install mcp-scanner --python 3.11
+        sudo -u defense /home/defense/.local/bin/uv --no-config tool install skill-scanner --python 3.11
     fi
     run systemctl enable cisco-defense
 }

@@ -10,8 +10,8 @@ install_comfyui() {
     if [ "$DRY_RUN" = false ]; then
         sudo -u comfyui bash -c "curl -LsSf https://astral.sh/uv/install.sh | sh"
         # Install ROCm specific PyTorch for GFX1151
-        sudo -u comfyui /home/comfyui/.local/bin/uv pip install --pre torch torchvision torchaudio --index-url https://rocm.nightlies.amd.com/v2/gfx1151/
-        sudo -u comfyui /home/comfyui/.local/bin/uv pip install -r /home/comfyui/ComfyUI/requirements.txt
+        sudo -u comfyui /home/comfyui/.local/bin/uv --no-config pip install --pre torch torchvision torchaudio --index-url https://rocm.nightlies.amd.com/v2/gfx1151/
+        sudo -u comfyui /home/comfyui/.local/bin/uv --no-config pip install -r /home/comfyui/ComfyUI/requirements.txt
     fi
     run systemctl enable comfyui
 }
