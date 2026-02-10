@@ -61,8 +61,9 @@ teardown() {
 
 @test "ace_step: creates an isolated venv (not uv sync)" {
     grep -q "python3.11 -m venv" "$STRIX_DIR/components/50-ace-step.sh"
-    # Must NOT use uv sync which pulls CUDA torch
-    ! grep -q "uv sync" "$STRIX_DIR/components/50-ace-step.sh"
+    # Must NOT call uv sync as a command (it pulls CUDA torch)
+    # Exclude comment lines from the check
+    ! grep -v '^\s*#' "$STRIX_DIR/components/50-ace-step.sh" | grep -q "uv sync"
 }
 
 # --- Script content: ROCm pinning ---

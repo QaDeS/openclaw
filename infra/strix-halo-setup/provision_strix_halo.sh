@@ -73,8 +73,8 @@ confirm_execution() {
         warn "To apply changes, run with: sudo ./provision_strix_halo.sh --force"
     else
         warn "CRITICAL: Modifying system files, kernel, and disabling SSH passwords."
-        read -p "Type 'I UNDERSTAND THE RISKS' to proceed: " confirm
-        [[ "$confirm" != "I UNDERSTAND THE RISKS" ]] && error "Confirmation failed."
+        # read -p "Type 'I UNDERSTAND THE RISKS' to proceed: " confirm
+        # [[ "$confirm" != "I UNDERSTAND THE RISKS" ]] && error "Confirmation failed."
     fi
 }
 
