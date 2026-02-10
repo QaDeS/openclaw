@@ -27,10 +27,14 @@ SYSTEMD_DIR="$STRIX_DIR/systemd"
     [ -f "$SYSTEMD_DIR/cisco-defense.service" ]
 }
 
-@test "systemd: exactly 5 service units exist" {
+@test "systemd: ace-step.service exists" {
+    [ -f "$SYSTEMD_DIR/ace-step.service" ]
+}
+
+@test "systemd: exactly 6 service units exist" {
     local count
     count=$(ls "$SYSTEMD_DIR"/*.service 2>/dev/null | wc -l)
-    [ "$count" -eq 5 ]
+    [ "$count" -eq 6 ]
 }
 
 # --- Required sections ---
@@ -130,7 +134,7 @@ SYSTEMD_DIR="$STRIX_DIR/systemd"
 # --- Restart policies ---
 
 @test "systemd: long-running services have Restart=always" {
-    for f in "$SYSTEMD_DIR/llmster.service" "$SYSTEMD_DIR/comfyui.service" "$SYSTEMD_DIR/cisco-defense.service"; do
+    for f in "$SYSTEMD_DIR/llmster.service" "$SYSTEMD_DIR/comfyui.service" "$SYSTEMD_DIR/cisco-defense.service" "$SYSTEMD_DIR/ace-step.service"; do
         grep -q "^Restart=always" "$f" || { echo "Missing Restart=always in $(basename "$f")"; return 1; }
     done
 }
@@ -168,7 +172,7 @@ SYSTEMD_DIR="$STRIX_DIR/systemd"
 # --- PYTORCH_ALLOC_CONF ---
 
 @test "systemd: GPU services have PYTORCH_ALLOC_CONF" {
-    for f in "$SYSTEMD_DIR/llmster.service" "$SYSTEMD_DIR/comfyui.service"; do
+    for f in "$SYSTEMD_DIR/llmster.service" "$SYSTEMD_DIR/comfyui.service" "$SYSTEMD_DIR/ace-step.service"; do
         grep -q "PYTORCH_ALLOC_CONF=expandable_segments:True" "$f" || {
             echo "Missing PYTORCH_ALLOC_CONF in $(basename "$f")"
             return 1
@@ -184,4 +188,46 @@ SYSTEMD_DIR="$STRIX_DIR/systemd"
 
 @test "systemd: openclaw.service WorkingDirectory is /home/claw" {
     grep -q "^WorkingDirectory=/home/claw" "$SYSTEMD_DIR/openclaw.service"
+}
+
+# --- ACE Step service ---
+
+@test "systemd: ace-step.service runs as comfyui user" {
+    grep -q "^User=comfyui" "$SYSTEMD_DIR/ace-step.service"
+}
+
+@test "systemd: ace-step.service uses venv_rocm python" {
+    grep -q "venv_rocm/bin/python" "$SYSTEMD_DIR/ace-step.service"
+}
+
+@test "systemd: ace-step.service uses --backend pt (forces PyTorch, avoids triton)" {
+    grep -q "\-\-backend pt" "$SYSTEMD_DIR/ace-step.service"
+}
+
+@test "systemd: ace-step.service sets ACESTEP_LM_BACKEND=pt" {
+    grep -q "ACESTEP_LM_BACKEND=pt" "$SYSTEMD_DIR/ace-step.service"
+}
+
+@test "systemd: ace-step.service disables torch.compile (TORCH_COMPILE_BACKEND=eager)" {
+    grep -q "TORCH_COMPILE_BACKEND=eager" "$SYSTEMD_DIR/ace-step.service"
+}
+
+@test "systemd: ace-step.service has HSA_OVERRIDE_GFX_VERSION=11.5.1" {
+    grep -q "HSA_OVERRIDE_GFX_VERSION=11.5.1" "$SYSTEMD_DIR/ace-step.service"
+}
+
+@test "systemd: ace-step.service has MIOPEN_FIND_MODE=FAST" {
+    grep -q "MIOPEN_FIND_MODE=FAST" "$SYSTEMD_DIR/ace-step.service"
+}
+
+@test "systemd: ace-step.service WorkingDirectory is ACE-Step-1.5" {
+    grep -q "^WorkingDirectory=/home/comfyui/ACE-Step-1.5" "$SYSTEMD_DIR/ace-step.service"
+}
+
+@test "systemd: ace-step.service listens on port 7860" {
+    grep -q "\-\-port 7860" "$SYSTEMD_DIR/ace-step.service"
+}
+
+@test "systemd: ace-step.service enables cpu_offload" {
+    grep -q "\-\-cpu_offload true" "$SYSTEMD_DIR/ace-step.service"
 }
