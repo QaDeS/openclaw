@@ -5,6 +5,7 @@
 
 install_comfyui() {
     log "Installing ComfyUI..."
+    ensure_user comfyui
     run sudo -u comfyui git clone https://github.com/comfyanonymous/ComfyUI.git /home/comfyui/ComfyUI || true
     if [ "$DRY_RUN" = false ]; then
         sudo -u comfyui bash -c "curl -LsSf https://astral.sh/uv/install.sh | sh"

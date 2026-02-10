@@ -14,7 +14,7 @@ teardown() {
 
 # --- All components load without error ---
 
-@test "integration: all 6 components source without error" {
+@test "integration: all 8 components source without error" {
     for f in "$STRIX_DIR"/components/*.sh; do
         source "$f"
     done
@@ -22,19 +22,19 @@ teardown() {
     [ ${#COMPONENT_LIST[@]} -ge 1 ]
 }
 
-@test "integration: after sourcing all components, COMPONENT_LIST has 6 entries" {
+@test "integration: after sourcing all components, COMPONENT_LIST has 8 entries" {
     for f in "$STRIX_DIR"/components/*.sh; do
         source "$f"
     done
     echo "COMPONENT_LIST: ${COMPONENT_LIST[*]}"
-    [ ${#COMPONENT_LIST[@]} -eq 6 ]
+    [ ${#COMPONENT_LIST[@]} -eq 8 ]
 }
 
 @test "integration: after sourcing all components, expected IDs are registered" {
     for f in "$STRIX_DIR"/components/*.sh; do
         source "$f"
     done
-    for expected in BASE LLM COMFYUI ZIMAGE ACE_STEP SECURITY; do
+    for expected in BASE OPENCLAW LMSTUDIO LLAMACPP COMFYUI ZIMAGE ACE_STEP SECURITY; do
         [[ " ${COMPONENT_LIST[*]} " == *" $expected "* ]] || {
             echo "Missing component: $expected"
             return 1
@@ -94,12 +94,12 @@ teardown() {
 
 # --- Cross-component consistency ---
 
-@test "integration: every AI_USER has at least one component that references them" {
+@test "integration: every service user is referenced in at least one component" {
     local all_components
     all_components=$(cat "$STRIX_DIR"/components/*.sh)
-    for user in lmstudio comfyui claw hosting defense; do
+    for user in lmstudio llamacpp comfyui claw hosting defense; do
         echo "$all_components" | grep -q "$user" || {
-            echo "AI_USER '$user' not referenced in any component"
+            echo "User '$user' not referenced in any component"
             return 1
         }
     done
@@ -118,20 +118,15 @@ teardown() {
     done
 }
 
-@test "integration: systemd users match AI_USERS list" {
-    local systemd_users=()
+@test "integration: every systemd user has an ensure_user call in components" {
+    local all_components
+    all_components=$(cat "$STRIX_DIR"/components/*.sh)
     for f in "$STRIX_DIR"/systemd/*.service; do
         local user
         user=$(grep '^User=' "$f" | cut -d= -f2)
-        [[ -n "$user" ]] && systemd_users+=("$user")
-    done
-    for su in "${systemd_users[@]}"; do
-        local found=false
-        for au in "${AI_USERS[@]}"; do
-            [[ "$su" == "$au" ]] && found=true
-        done
-        $found || {
-            echo "Systemd user '$su' not in AI_USERS array"
+        [[ -n "$user" ]] || continue
+        echo "$all_components" | grep -q "ensure_user $user" || {
+            echo "Systemd user '$user' ($(basename "$f")) has no ensure_user call in components"
             return 1
         }
     done

@@ -5,6 +5,7 @@
 
 install_cisco_defense() {
     log "Installing Cisco AI Defense..."
+    ensure_user defense
     run cp ${INFRA_DIR}/defense/cisco-defense-daemon.py /home/defense/
     run chown defense:defense /home/defense/cisco-defense-daemon.py
     if [ "$DRY_RUN" = false ]; then
@@ -19,6 +20,7 @@ install_cisco_defense() {
 
 install_hosting_stack() {
     log "Installing Web Hosting Stack (Supabase + WordPress)..."
+    ensure_user hosting
     if ! command -v docker &> /dev/null; then
         run curl -fsSL https://get.docker.com | sh
     fi

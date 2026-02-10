@@ -26,22 +26,12 @@ teardown() {
     [ "$HSA_OVERRIDE" = "11.5.1" ]
 }
 
-@test "global config: AI_USERS has 5 entries" {
-    [ ${#AI_USERS[@]} -eq 5 ]
+@test "global config: ensure_user helper is defined" {
+    type -t ensure_user | grep -q "function"
 }
 
-@test "global config: AI_USERS contains expected users" {
-    local found_lmstudio=false found_comfyui=false found_claw=false found_hosting=false found_defense=false
-    for u in "${AI_USERS[@]}"; do
-        case "$u" in
-            lmstudio) found_lmstudio=true ;;
-            comfyui)  found_comfyui=true ;;
-            claw)     found_claw=true ;;
-            hosting)  found_hosting=true ;;
-            defense)  found_defense=true ;;
-        esac
-    done
-    $found_lmstudio && $found_comfyui && $found_claw && $found_hosting && $found_defense
+@test "global config: LOCAL_LLM_URL default is LM Studio port" {
+    [ "$LOCAL_LLM_URL" = "http://localhost:1234/v1" ]
 }
 
 # --- DRY_RUN mode ---
@@ -177,8 +167,8 @@ teardown() {
     done
 }
 
-@test "exactly 6 component scripts exist" {
+@test "exactly 8 component scripts exist" {
     local count
     count=$(ls "$STRIX_DIR"/components/*.sh 2>/dev/null | wc -l)
-    [ "$count" -eq 6 ]
+    [ "$count" -eq 8 ]
 }

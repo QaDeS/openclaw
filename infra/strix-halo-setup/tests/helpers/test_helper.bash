@@ -149,11 +149,10 @@ load_provision_globals() {
     export INFRA_DIR="$PROJECT_ROOT/infra/strix-halo-setup"
     export KERNEL_VERSION="6.18.7"
     export ROCM_VERSION="7.2"
-    export AI_USERS=("lmstudio" "comfyui" "claw" "hosting" "defense")
     export SHARED_MODEL_DIR="$TEST_TMPDIR/models"
-    export LM_STUDIO_URL="https://releases.lmstudio.ai/linux/x86_64/latest/LM-Studio.AppImage"
     export ACE_STEP_MODEL_URL="https://huggingface.co/Linaqruf/ace-step-1.5-turbo-aio/resolve/main/ace_step_1.5_turbo_aio.safetensors"
     export HSA_OVERRIDE="11.5.1"
+    export LOCAL_LLM_URL="http://localhost:1234/v1"
 
     $_REAL_MKDIR -p "$SHARED_MODEL_DIR"
 
@@ -201,7 +200,24 @@ load_provision_globals() {
         fi
     }
 
-    export -f log warn success error run register_component confirm_execution
+    ensure_user() {
+        local user=$1
+        if ! id "$user" &>/dev/null; then
+            run useradd -m -s /bin/bash -G ai-users,render,video "$user"
+        fi
+    }
+
+    set_local_llm_url() {
+        local url=$1
+        LOCAL_LLM_URL="$url"
+        local env_file="/home/claw/.openclaw/docker.env"
+        if [ -f "$env_file" ]; then
+            sed -i "s|^LOCAL_LLM_URL=.*|LOCAL_LLM_URL=${url}|" "$env_file"
+            log "Updated LOCAL_LLM_URL → ${url}"
+        fi
+    }
+
+    export -f log warn success error run register_component confirm_execution ensure_user set_local_llm_url
 }
 
 # capture — Run a function and capture its output + exit status.

@@ -13,5 +13,5 @@ services:
     restart: unless-stopped
     environment:
       - NODE_ENV=production
-      - LMSTUDIO_BASE_URL=${LMSTUDIO_BASE_URL}
+      - LOCAL_LLM_URL=${LOCAL_LLM_URL}
     network_mode: host

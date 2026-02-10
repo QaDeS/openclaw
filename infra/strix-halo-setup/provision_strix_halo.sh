@@ -11,9 +11,8 @@ INFRA_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$INFRA_DIR/../.." && pwd)"
 KERNEL_VERSION="6.18.7"
 ROCM_VERSION="7.2"
-AI_USERS=("lmstudio" "comfyui" "claw" "hosting" "defense")
 SHARED_MODEL_DIR="/models"
-LM_STUDIO_URL="https://releases.lmstudio.ai/linux/x86_64/latest/LM-Studio.AppImage"
+LOCAL_LLM_URL="http://localhost:1234/v1"
 ACE_STEP_MODEL_URL="https://huggingface.co/Linaqruf/ace-step-1.5-turbo-aio/resolve/main/ace_step_1.5_turbo_aio.safetensors"
 HSA_OVERRIDE="11.5.1"
 
@@ -24,7 +23,9 @@ COMPONENT_LIST=()
 INSTALL_MODES=()
 
 DRY_RUN=true
+REDOWNLOAD=false
 [[ "$*" == *"--force"* ]] && DRY_RUN=false
+[[ "$*" == *"--redownload"* ]] && REDOWNLOAD=true
 
 # --- Colors & Logging ---
 BLUE='\033[0;34m'
@@ -43,6 +44,24 @@ run() {
         log "${YELLOW}[DRY-RUN] Will execute:${NC} $*"
     else
         "$@"
+    fi
+}
+
+# --- Helpers ---
+ensure_user() {
+    local user=$1
+    if ! id "$user" &>/dev/null; then
+        run useradd -m -s /bin/bash -G ai-users,render,video "$user"
+    fi
+}
+
+set_local_llm_url() {
+    local url=$1
+    LOCAL_LLM_URL="$url"
+    local env_file="/home/claw/.openclaw/docker.env"
+    if [ -f "$env_file" ]; then
+        sed -i "s|^LOCAL_LLM_URL=.*|LOCAL_LLM_URL=${url}|" "$env_file"
+        log "Updated LOCAL_LLM_URL → ${url}"
     fi
 }
 
@@ -109,7 +128,21 @@ show_menu() {
     esac
 }
 
+show_help() {
+    cat <<HELPEOF
+Usage: sudo ./provision_strix_halo.sh [OPTIONS]
+
+Options:
+  --force        Apply changes (default is dry-run)
+  --redownload   Re-download assets even if they already exist
+  --all          Skip menu and install all components
+  --help, -h     Show this help message
+HELPEOF
+    exit 0
+}
+
 main() {
+    [[ "$*" == *"--help"* || "$*" == *"-h"* ]] && show_help
     [[ $EUID -ne 0 ]] && error "Run as root."
     check_ssh_safety
     confirm_execution

@@ -53,8 +53,8 @@ print('valid')
     grep -q 'NODE_ENV=production' "$DOCKER_DIR/openclaw-compose.yml"
 }
 
-@test "docker: openclaw-compose references LMSTUDIO_BASE_URL" {
-    grep -q 'LMSTUDIO_BASE_URL' "$DOCKER_DIR/openclaw-compose.yml"
+@test "docker: openclaw-compose references LOCAL_LLM_URL" {
+    grep -q 'LOCAL_LLM_URL' "$DOCKER_DIR/openclaw-compose.yml"
 }
 
 @test "docker: openclaw-compose bind-mounts LOCAL_REPO_PATH to /app" {

@@ -31,10 +31,14 @@ SYSTEMD_DIR="$STRIX_DIR/systemd"
     [ -f "$SYSTEMD_DIR/ace-step.service" ]
 }
 
-@test "systemd: exactly 6 service units exist" {
+@test "systemd: llamacpp.service exists" {
+    [ -f "$SYSTEMD_DIR/llamacpp.service" ]
+}
+
+@test "systemd: exactly 7 service units exist" {
     local count
     count=$(ls "$SYSTEMD_DIR"/*.service 2>/dev/null | wc -l)
-    [ "$count" -eq 6 ]
+    [ "$count" -eq 7 ]
 }
 
 # --- Required sections ---
@@ -89,6 +93,18 @@ SYSTEMD_DIR="$STRIX_DIR/systemd"
     grep -q "^User=lmstudio" "$SYSTEMD_DIR/llmster.service"
 }
 
+@test "systemd: llamacpp.service runs as llamacpp user" {
+    grep -q "^User=llamacpp" "$SYSTEMD_DIR/llamacpp.service"
+}
+
+@test "systemd: llamacpp.service listens on port 11234" {
+    grep -q "\-\-port 11234" "$SYSTEMD_DIR/llamacpp.service"
+}
+
+@test "systemd: llamacpp.service has Restart=on-failure" {
+    grep -q "^Restart=on-failure" "$SYSTEMD_DIR/llamacpp.service"
+}
+
 @test "systemd: comfyui.service runs as comfyui user" {
     grep -q "^User=comfyui" "$SYSTEMD_DIR/comfyui.service"
 }
@@ -116,7 +132,7 @@ SYSTEMD_DIR="$STRIX_DIR/systemd"
 }
 
 @test "systemd: oneshot services have RemainAfterExit=yes" {
-    for f in "$SYSTEMD_DIR/openclaw.service" "$SYSTEMD_DIR/hosting.service"; do
+    for f in "$SYSTEMD_DIR/llmster.service" "$SYSTEMD_DIR/openclaw.service" "$SYSTEMD_DIR/hosting.service"; do
         grep -q "RemainAfterExit=yes" "$f" || { echo "Missing RemainAfterExit in $(basename "$f")"; return 1; }
     done
 }
@@ -134,7 +150,7 @@ SYSTEMD_DIR="$STRIX_DIR/systemd"
 # --- Restart policies ---
 
 @test "systemd: long-running services have Restart=always" {
-    for f in "$SYSTEMD_DIR/llmster.service" "$SYSTEMD_DIR/comfyui.service" "$SYSTEMD_DIR/cisco-defense.service" "$SYSTEMD_DIR/ace-step.service"; do
+    for f in "$SYSTEMD_DIR/comfyui.service" "$SYSTEMD_DIR/cisco-defense.service" "$SYSTEMD_DIR/ace-step.service"; do
         grep -q "^Restart=always" "$f" || { echo "Missing Restart=always in $(basename "$f")"; return 1; }
     done
 }
@@ -149,8 +165,8 @@ SYSTEMD_DIR="$STRIX_DIR/systemd"
 
 # --- ExecStart paths ---
 
-@test "systemd: llmster.service starts AppImage with --headless" {
-    grep -q "ExecStart=.*/lm-studio.AppImage --headless" "$SYSTEMD_DIR/llmster.service"
+@test "systemd: llmster.service starts lms server" {
+    grep -q "ExecStart=.*/lms server start" "$SYSTEMD_DIR/llmster.service"
 }
 
 @test "systemd: comfyui.service starts python3 main.py with --listen" {

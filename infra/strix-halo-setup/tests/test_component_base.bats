@@ -26,10 +26,10 @@ teardown() {
     [ "$count" -eq 3 ]
 }
 
-@test "base: registered functions are install_base, setup_users, deploy_base_config" {
+@test "base: registered functions are install_base, setup_shared_dirs, deploy_base_config" {
     local funcs="${COMPONENT_FUNCS[BASE]}"
     [[ "$funcs" == *"install_base"* ]]
-    [[ "$funcs" == *"setup_users"* ]]
+    [[ "$funcs" == *"setup_shared_dirs"* ]]
     [[ "$funcs" == *"deploy_base_config"* ]]
 }
 
@@ -72,29 +72,29 @@ teardown() {
     [[ "$_output" == *"mainline install"* ]]
 }
 
-# --- setup_users (dry-run) ---
+# --- setup_shared_dirs (dry-run) ---
 
-@test "base: setup_users runs in dry-run without errors" {
+@test "base: setup_shared_dirs runs in dry-run without errors" {
     DRY_RUN=true
-    capture setup_users
+    capture setup_shared_dirs
     [ "$_status" -eq 0 ]
 }
 
-@test "base: setup_users would create ai-users group" {
+@test "base: setup_shared_dirs would create ai-users group" {
     DRY_RUN=true
-    capture setup_users
+    capture setup_shared_dirs
     [[ "$_output" == *"groupadd"*"ai-users"* ]]
 }
 
-@test "base: setup_users would create shared model directory" {
+@test "base: setup_shared_dirs would create shared model directory" {
     DRY_RUN=true
-    capture setup_users
+    capture setup_shared_dirs
     [[ "$_output" == *"mkdir"*"models"* ]]
 }
 
-@test "base: setup_users would set setgid on model dir" {
+@test "base: setup_shared_dirs would set setgid on model dir" {
     DRY_RUN=true
-    capture setup_users
+    capture setup_shared_dirs
     [[ "$_output" == *"chmod"*"2775"* ]]
 }
 

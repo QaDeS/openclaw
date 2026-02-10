@@ -1,0 +1,16 @@
+[Unit]
+Description=llama.cpp Server (Vulkan)
+After=network.target
+
+[Service]
+Type=simple
+User=llamacpp
+Environment=HOME=/home/llamacpp
+ExecStart=/home/llamacpp/llama.cpp/build/bin/llama-server \
+    --host 0.0.0.0 --port 11234 \
+    --model /home/llamacpp/models/default.gguf
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
