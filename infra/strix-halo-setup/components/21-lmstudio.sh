@@ -9,7 +9,19 @@ install_lmstudio() {
 
     if [ "$DRY_RUN" = false ]; then
         if [ "$REDOWNLOAD" = true ] || [ ! -f /home/lmstudio/.lmstudio/bin/lms ]; then
-            sudo -u lmstudio bash -c 'curl -fsSL https://lmstudio.ai/install.sh | bash'
+            local attempt
+            for attempt in 1 2 3; do
+                log "LM Studio install attempt ${attempt}/3..."
+                if sudo -u lmstudio bash -c 'curl -fsSL https://lmstudio.ai/install.sh | bash'; then
+                    break
+                fi
+                if [ "$attempt" -lt 3 ]; then
+                    warn "LM Studio install failed, retrying in 5s..."
+                    sleep 5
+                else
+                    error "LM Studio install failed after 3 attempts"
+                fi
+            done
         else
             log "LM Studio already installed, skipping (use --redownload to force)"
         fi

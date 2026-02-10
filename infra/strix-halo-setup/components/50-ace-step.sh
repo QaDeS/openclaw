@@ -12,12 +12,20 @@ ACE_STEP_TORCH_INDEX="https://rocm.nightlies.amd.com/v2/gfx1151/"
 install_ace_step() {
     log "Installing ACE Step 1.5 Standalone (Music Generation)..."
 
-    # 1. Clone the standalone project
-    run sudo -u comfyui git clone "${ACE_STEP_REPO}" "${ACE_STEP_HOME}" || true
+    # 1. Clone or update the standalone project
+    if [ "$DRY_RUN" = false ]; then
+        if [ -d "${ACE_STEP_HOME}" ] && [ "$REDOWNLOAD" = false ]; then
+            log "ACE-Step already cloned, pulling latest..."
+            sudo -u comfyui git -C "${ACE_STEP_HOME}" pull --rebase
+        else
+            sudo -u comfyui rm -rf "${ACE_STEP_HOME}"
+            sudo -u comfyui git clone "${ACE_STEP_REPO}" "${ACE_STEP_HOME}"
+        fi
+    fi
 
     if [ "$DRY_RUN" = false ]; then
         # 2. Create an isolated venv (NOT uv sync — that pulls CUDA torch)
-        sudo -u comfyui python3.11 -m venv "${ACE_STEP_VENV}"
+        sudo -u comfyui python3 -m venv "${ACE_STEP_VENV}"
         local PIP="${ACE_STEP_VENV}/bin/pip"
         local PYTHON="${ACE_STEP_VENV}/bin/python"
 

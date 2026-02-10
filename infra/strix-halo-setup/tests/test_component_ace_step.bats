@@ -37,10 +37,8 @@ teardown() {
     [[ "$_output" == *"ACE Step"* ]]
 }
 
-@test "ace_step: would clone the standalone repo in dry-run" {
-    DRY_RUN=true
-    capture install_ace_step
-    [[ "$_output" == *"git clone"* ]]
+@test "ace_step: references ACE-Step repo clone in source" {
+    grep -q "git clone.*ACE_STEP_REPO" "$STRIX_DIR/components/50-ace-step.sh"
 }
 
 @test "ace_step: would enable ace-step service in dry-run" {
@@ -60,7 +58,7 @@ teardown() {
 }
 
 @test "ace_step: creates an isolated venv (not uv sync)" {
-    grep -q "python3.11 -m venv" "$STRIX_DIR/components/50-ace-step.sh"
+    grep -q "python3 -m venv" "$STRIX_DIR/components/50-ace-step.sh"
     # Must NOT call uv sync as a command (it pulls CUDA torch)
     # Exclude comment lines from the check
     ! grep -v '^\s*#' "$STRIX_DIR/components/50-ace-step.sh" | grep -q "uv sync"

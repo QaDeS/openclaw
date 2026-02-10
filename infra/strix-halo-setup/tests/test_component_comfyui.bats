@@ -65,6 +65,17 @@ teardown() {
     grep -q "requirements.txt" "$STRIX_DIR/components/30-comfyui.sh"
 }
 
-@test "comfyui: git clone uses || true for idempotency" {
-    grep -q 'git clone.*|| true' "$STRIX_DIR/components/30-comfyui.sh"
+@test "comfyui: uses exists-check + pull for idempotent clone" {
+    grep -q 'git.*pull' "$STRIX_DIR/components/30-comfyui.sh"
+    grep -q 'REDOWNLOAD' "$STRIX_DIR/components/30-comfyui.sh"
+}
+
+@test "comfyui: creates a venv for package isolation" {
+    grep -q 'venv' "$STRIX_DIR/components/30-comfyui.sh"
+    grep -q '\.venv' "$STRIX_DIR/components/30-comfyui.sh"
+}
+
+@test "comfyui: installs packages into venv python (not system)" {
+    grep -q '\-\-python' "$STRIX_DIR/components/30-comfyui.sh"
+    grep -q 'venv_dir.*/bin/python' "$STRIX_DIR/components/30-comfyui.sh"
 }

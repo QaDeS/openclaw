@@ -173,8 +173,9 @@ SYSTEMD_DIR="$STRIX_DIR/systemd"
     grep -q "ExecStart=.*/lms server start" "$SYSTEMD_DIR/llmster.service"
 }
 
-@test "systemd: comfyui.service starts python3 main.py with --listen" {
-    grep -q "ExecStart=.*/python3 main.py --listen" "$SYSTEMD_DIR/comfyui.service"
+@test "systemd: comfyui.service starts python main.py with --listen from venv" {
+    grep -q "ExecStart=.*/python main.py --listen" "$SYSTEMD_DIR/comfyui.service"
+    grep -q "\.venv/bin/python" "$SYSTEMD_DIR/comfyui.service"
 }
 
 @test "systemd: openclaw.service uses docker compose up -d" {
