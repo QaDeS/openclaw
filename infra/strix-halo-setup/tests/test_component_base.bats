@@ -69,7 +69,7 @@ teardown() {
 @test "base: install_base would install mainline" {
     DRY_RUN=true
     capture install_base
-    [[ "$_output" == *"mainline --install"* ]]
+    [[ "$_output" == *"mainline install"* ]]
 }
 
 # --- setup_users (dry-run) ---
@@ -148,4 +148,25 @@ teardown() {
 @test "base: GTT size uses half of system RAM" {
     grep -q 'total_mem.*/ 2' "$STRIX_DIR/components/10-base.sh" || \
     grep -q 'gtt_size=$((total_mem / 2))' "$STRIX_DIR/components/10-base.sh"
+}
+
+# --- Script content: ROCm codename detection ---
+
+@test "base: detects Ubuntu codename from os-release (not hardcoded jammy)" {
+    ! grep -v '^\s*#' "$STRIX_DIR/components/10-base.sh" | grep -q '"jammy main"'
+    grep -q 'UBUNTU_CODENAME' "$STRIX_DIR/components/10-base.sh"
+}
+
+@test "base: falls back to noble for unknown derivatives" {
+    grep -q 'ubuntu_codename="noble"' "$STRIX_DIR/components/10-base.sh"
+}
+
+@test "base: pins ROCm repo above Ubuntu universe" {
+    grep -q 'rocm-pin' "$STRIX_DIR/components/10-base.sh"
+    grep -q 'Pin-Priority: 700' "$STRIX_DIR/components/10-base.sh"
+}
+
+@test "base: uses mainline install (not --install)" {
+    grep -q 'mainline install' "$STRIX_DIR/components/10-base.sh"
+    ! grep -q 'mainline --install' "$STRIX_DIR/components/10-base.sh"
 }

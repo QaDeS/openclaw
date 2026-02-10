@@ -147,7 +147,7 @@ MOCK
 load_provision_globals() {
     export DRY_RUN=true
     export INFRA_DIR="$PROJECT_ROOT/infra/strix-halo-setup"
-    export KERNEL_VERSION="6.18.4"
+    export KERNEL_VERSION="6.18.7"
     export ROCM_VERSION="7.2"
     export AI_USERS=("lmstudio" "comfyui" "claw" "hosting" "defense")
     export SHARED_MODEL_DIR="$TEST_TMPDIR/models"

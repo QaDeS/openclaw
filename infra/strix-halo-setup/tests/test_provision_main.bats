@@ -15,7 +15,7 @@ teardown() {
 # --- Global configuration ---
 
 @test "global config: KERNEL_VERSION is set" {
-    [ "$KERNEL_VERSION" = "6.18.4" ]
+    [ "$KERNEL_VERSION" = "6.18.7" ]
 }
 
 @test "global config: ROCM_VERSION is set" {

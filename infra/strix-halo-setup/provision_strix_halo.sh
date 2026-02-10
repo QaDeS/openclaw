@@ -9,7 +9,7 @@ set -eo pipefail
 # --- Global Configuration ---
 INFRA_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$INFRA_DIR/../.." && pwd)"
-KERNEL_VERSION="6.18.4"
+KERNEL_VERSION="6.18.7"
 ROCM_VERSION="7.2"
 AI_USERS=("lmstudio" "comfyui" "claw" "hosting" "defense")
 SHARED_MODEL_DIR="/models"
