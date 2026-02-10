@@ -207,6 +207,9 @@ load_provision_globals() {
         fi
     }
 
+    # In test env, nothing is installed
+    is_installed() { return 1; }
+
     set_local_llm_url() {
         local url=$1
         LOCAL_LLM_URL="$url"
@@ -217,7 +220,7 @@ load_provision_globals() {
         fi
     }
 
-    export -f log warn success error run register_component confirm_execution ensure_user set_local_llm_url
+    export -f log warn success error run register_component confirm_execution ensure_user is_installed set_local_llm_url
 }
 
 # capture — Run a function and capture its output + exit status.

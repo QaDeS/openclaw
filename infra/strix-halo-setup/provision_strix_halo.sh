@@ -97,35 +97,98 @@ confirm_execution() {
     fi
 }
 
-show_menu() {
-    echo -e "${BLUE}=== Strix Halo Setup Menu ===${NC}"
-    echo "0) Full Installation (All components)"
-    
-    local i=1
-    for id in "${COMPONENT_LIST[@]}"; do
-        echo "$i) ${COMPONENT_NAMES[$id]}"
-        i=$((i+1))
-    done
-    
-    echo "c) Custom selection"
-    echo "q) Quit"
-    read -p "Select an option: " choice
-
-    case $choice in
-        0) INSTALL_MODES=("${COMPONENT_LIST[@]}") ;;
-        [1-9]) 
-            local idx=$((choice-1))
-            INSTALL_MODES=("${COMPONENT_LIST[$idx]}") 
-            ;;
-        c)
-            for id in "${COMPONENT_LIST[@]}"; do
-                read -p "Install ${COMPONENT_NAMES[$id]} (y/n)? " selection
-                [[ "$selection" == "y" ]] && INSTALL_MODES+=("$id")
-            done
-            ;;
-        q) exit 0 ;;
-        *) error "Invalid option." ;;
+# --- System State Detection ---
+# Returns 0 (true) if a component appears to be already installed.
+is_installed() {
+    local id=$1
+    case "$id" in
+        BASE)      ls -d /opt/rocm-${ROCM_VERSION}* >/dev/null 2>&1 ;;
+        OPENCLAW)  [ -f /home/claw/openclaw-compose.yml ] ;;
+        LMSTUDIO)  [ -f /home/lmstudio/.lmstudio/bin/lms ] ;;
+        LLAMACPP)  [ -x /home/llamacpp/llama.cpp/build/bin/llama-server ] ;;
+        COMFYUI)   [ -d /home/comfyui/ComfyUI ] ;;
+        ZIMAGE)    [ -d /home/comfyui/ComfyUI ] && /home/comfyui/.local/bin/uv --no-config pip show accelerate >/dev/null 2>&1 ;;
+        ACE_STEP)  [ -d /home/comfyui/ACE-Step-1.5 ] ;;
+        SECURITY)  [ -f /home/defense/cisco-defense-daemon.py ] ;;
+        *)         return 1 ;;
     esac
+}
+
+show_menu() {
+    # Build selection array: default to selecting components that are NOT installed
+    local total=${#COMPONENT_LIST[@]}
+    declare -A selected
+    for id in "${COMPONENT_LIST[@]}"; do
+        if is_installed "$id"; then
+            selected["$id"]=false
+        else
+            selected["$id"]=true
+        fi
+    done
+
+    while true; do
+        echo ""
+        echo -e "${BLUE}=== Strix Halo Setup ===${NC}"
+        echo ""
+
+        local i=1
+        for id in "${COMPONENT_LIST[@]}"; do
+            local marker=" "
+            ${selected[$id]} && marker="*"
+            local status=""
+            if is_installed "$id"; then
+                status="${GREEN}(installed)${NC}"
+            fi
+            printf "  %s${BLUE}%d${NC}) %-30s %b\n" "[$marker] " "$i" "${COMPONENT_NAMES[$id]}" "$status"
+            i=$((i+1))
+        done
+
+        echo ""
+        echo -e "  ${YELLOW}Toggle${NC}: enter numbers (e.g. ${BLUE}1 3 5${NC} or ${BLUE}1,3,5${NC})"
+        echo -e "  ${YELLOW}a${NC} = select all   ${YELLOW}n${NC} = select none   ${YELLOW}Enter${NC} = confirm   ${YELLOW}q${NC} = quit"
+        echo ""
+        read -p "  > " input
+
+        # Trim whitespace
+        input=$(echo "$input" | xargs)
+
+        case "$input" in
+            "")
+                # Confirm current selection
+                for id in "${COMPONENT_LIST[@]}"; do
+                    ${selected[$id]} && INSTALL_MODES+=("$id")
+                done
+                return
+                ;;
+            q|Q)
+                exit 0
+                ;;
+            a|A)
+                for id in "${COMPONENT_LIST[@]}"; do selected["$id"]=true; done
+                ;;
+            n|N)
+                for id in "${COMPONENT_LIST[@]}"; do selected["$id"]=false; done
+                ;;
+            *)
+                # Parse comma or space separated numbers and toggle them
+                local nums
+                nums=$(echo "$input" | tr ',' ' ')
+                for num in $nums; do
+                    if [[ "$num" =~ ^[0-9]+$ ]] && [ "$num" -ge 1 ] && [ "$num" -le "$total" ]; then
+                        local idx=$((num-1))
+                        local id="${COMPONENT_LIST[$idx]}"
+                        if ${selected[$id]}; then
+                            selected["$id"]=false
+                        else
+                            selected["$id"]=true
+                        fi
+                    else
+                        warn "Invalid number: $num (valid: 1-$total)"
+                    fi
+                done
+                ;;
+        esac
+    done
 }
 
 show_help() {
@@ -136,13 +199,18 @@ Options:
   --force        Apply changes (default is dry-run)
   --redownload   Re-download assets even if they already exist
   --all          Skip menu and install all components
+  --only ID,...  Install specific components (comma-separated IDs)
   --help, -h     Show this help message
+
+Component IDs:
 HELPEOF
+    for id in "${COMPONENT_LIST[@]}"; do
+        printf "  %-12s %s\n" "$id" "${COMPONENT_NAMES[$id]}"
+    done
     exit 0
 }
 
 main() {
-    [[ "$*" == *"--help"* || "$*" == *"-h"* ]] && show_help
     [[ $EUID -ne 0 ]] && error "Run as root."
     check_ssh_safety
     confirm_execution
@@ -152,8 +220,23 @@ main() {
         source "$component"
     done
 
+    [[ "$*" == *"--help"* || "$*" == *"-h"* ]] && show_help
+
     if [[ "$*" == *"--all"* ]]; then
         INSTALL_MODES=("${COMPONENT_LIST[@]}")
+    elif [[ "$*" == *"--only"* ]]; then
+        # Extract the value after --only
+        local only_val
+        only_val=$(echo "$*" | grep -oP '(?<=--only\s)\S+')
+        IFS=',' read -ra only_ids <<< "$only_val"
+        for id in "${only_ids[@]}"; do
+            id=$(echo "$id" | tr '[:lower:]' '[:upper:]')
+            if [[ -n "${COMPONENT_NAMES[$id]+x}" ]]; then
+                INSTALL_MODES+=("$id")
+            else
+                warn "Unknown component: $id (skipping)"
+            fi
+        done
     else
         show_menu
     fi
