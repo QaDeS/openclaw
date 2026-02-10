@@ -24,8 +24,9 @@ install_ace_step() {
     fi
 
     if [ "$DRY_RUN" = false ]; then
-        # 2. Create an isolated venv (NOT uv sync — that pulls CUDA torch)
-        sudo -u comfyui python3 -m venv "${ACE_STEP_VENV}"
+        # 2. Create an isolated venv via uv (avoids python3-venv apt dep)
+        local UV="/home/comfyui/.local/bin/uv"
+        sudo -u comfyui "$UV" --no-config venv "${ACE_STEP_VENV}"
         local PIP="${ACE_STEP_VENV}/bin/pip"
         local PYTHON="${ACE_STEP_VENV}/bin/python"
 

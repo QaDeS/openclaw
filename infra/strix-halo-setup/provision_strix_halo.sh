@@ -258,6 +258,62 @@ main() {
     done
 
     success "Provisioning complete for selected components! REBOOT is required."
+
+    # Print accessible URLs for installed components
+    print_urls
+}
+
+print_urls() {
+    local host
+    host=$(hostname)
+
+    echo ""
+    echo -e "${BLUE}=== Access URLs (use ${GREEN}${host}${BLUE} from your laptop) ===${NC}"
+    echo ""
+
+    # Show URLs for ALL installed components (pre-existing + just provisioned)
+    local any=false
+    for id in "${COMPONENT_LIST[@]}"; do
+        # Show if just installed OR was already installed
+        local dominated=false
+        for m in "${INSTALL_MODES[@]}"; do [[ "$m" == "$id" ]] && dominated=true; done
+        if ! $dominated && ! is_installed "$id"; then
+            continue
+        fi
+
+        case "$id" in
+            BASE)
+                echo -e "  ${GREEN}RDP Desktop${NC}        rdp://${host}:3389"
+                any=true
+                ;;
+            LMSTUDIO)
+                echo -e "  ${GREEN}LM Studio API${NC}      http://${host}:1234/v1"
+                any=true
+                ;;
+            LLAMACPP)
+                echo -e "  ${GREEN}llama.cpp API${NC}      http://${host}:11234/v1"
+                echo -e "  ${GREEN}llama.cpp UI${NC}       http://${host}:11234"
+                any=true
+                ;;
+            COMFYUI)
+                echo -e "  ${GREEN}ComfyUI${NC}            http://${host}:8188"
+                any=true
+                ;;
+            ACE_STEP)
+                echo -e "  ${GREEN}ACE Step (Music)${NC}   http://${host}:7860"
+                any=true
+                ;;
+            SECURITY)
+                echo -e "  ${GREEN}WordPress${NC}          http://${host}:8080"
+                any=true
+                ;;
+        esac
+    done
+
+    if [ "$any" = false ]; then
+        echo -e "  ${YELLOW}(no web-accessible components installed)${NC}"
+    fi
+    echo ""
 }
 
 main "$@"
