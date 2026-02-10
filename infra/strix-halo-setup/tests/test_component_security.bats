@@ -109,10 +109,12 @@ teardown() {
     [[ "$_output" == *"ufw"*"22"* ]]
 }
 
-@test "security: harden_system would allow RDP port 3389" {
+@test "security: harden_system would allow LAN subnets" {
     DRY_RUN=true
     capture harden_system
-    [[ "$_output" == *"ufw"*"3389"* ]]
+    [[ "$_output" == *"ufw"*"192.168.0.0/16"* ]]
+    [[ "$_output" == *"ufw"*"10.0.0.0/8"* ]]
+    [[ "$_output" == *"ufw"*"172.16.0.0/12"* ]]
 }
 
 # --- Script content checks ---

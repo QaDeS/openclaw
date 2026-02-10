@@ -283,7 +283,7 @@ print_urls() {
 
         case "$id" in
             BASE)
-                echo -e "  ${GREEN}RDP Desktop${NC}        rdp://${host}:3389"
+                echo -e "  ${GREEN}RDP Desktop${NC}        ssh -L 3389:localhost:3389 ${host}  →  rdp://localhost:3389"
                 any=true
                 ;;
             LMSTUDIO)

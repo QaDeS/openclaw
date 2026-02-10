@@ -138,9 +138,10 @@ rocm-smi
 
 ## �🔒 Security & Remote Access
 
-- **SSH**: Password authentication is disabled. **Ensure your laptop's public key is in `~/.ssh/authorized_keys`** of the sudo user before running.
-- **RDP (TCP 3389)**: Connect via any RDP client to access the GPU-accelerated 4K virtual desktop.
-- **Firewall**: UFW is enabled and configured for SSH, RDP, and Hosting ports.
+- **SSH**: Password authentication is disabled. **Ensure your laptop's public key is in `~/.ssh/authorized_keys`** of the sudo user before running. SSH (port 22) is open from anywhere.
+- **RDP**: Bound to localhost only. Access via SSH tunnel: `ssh -L 3389:localhost:3389 strix` then connect your RDP client to `localhost:3389`. This gates RDP behind SSH key authentication.
+- **LAN access**: All ports are open from private networks (10.x, 172.16-31.x, 192.168.x) and Tailscale (100.64.x).
+- **Firewall**: UFW default-deny for external traffic; only SSH is exposed to the internet.
 
 ## 🧠 Model Sharing (Unified Memory)
 

@@ -120,6 +120,10 @@ Section "Screen"
 EndSection
 EOF
     fi
+    # Bind xrdp to localhost only — access via SSH tunnel (key-gated)
+    if [ "$DRY_RUN" = false ]; then
+        sed -i 's/^port=.*/port=tcp:\/\/127.0.0.1:3389/' /etc/xrdp/xrdp.ini
+    fi
     run systemctl enable xrdp
     run systemctl restart xrdp
 }

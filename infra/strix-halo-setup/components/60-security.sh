@@ -49,8 +49,18 @@ harden_system() {
         sed -i 's/^#\?PubkeyAuthentication .*/PubkeyAuthentication yes/' /etc/ssh/sshd_config
         systemctl restart ssh
     fi
+
+    # SSH from anywhere (key-only auth enforced above)
     run ufw allow 22
-    run ufw allow 3389
+
+    # Allow all traffic from private/local networks
+    run ufw allow from 10.0.0.0/8
+    run ufw allow from 172.16.0.0/12
+    run ufw allow from 192.168.0.0/16
+
+    # Tailscale subnet (if using Tailscale for remote LAN-like access)
+    run ufw allow from 100.64.0.0/10
+
     run ufw --force enable
 }
 
