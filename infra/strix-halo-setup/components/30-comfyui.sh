@@ -36,6 +36,14 @@ install_comfyui() {
             --python "${venv_dir}/bin/python" \
             -r "${repo_dir}/requirements.txt"
     fi
+    # Allow the provisioning user to rsync files as comfyui (model uploads)
+    if [ -n "$SUDO_USER" ]; then
+        run tee /etc/sudoers.d/comfyui-upload > /dev/null <<EOF
+${SUDO_USER} ALL=(comfyui) NOPASSWD: /usr/bin/rsync
+EOF
+        run chmod 0440 /etc/sudoers.d/comfyui-upload
+    fi
+
     run cp ${INFRA_DIR}/systemd/comfyui.service /etc/systemd/system/comfyui.service
     run systemctl daemon-reload
     run systemctl enable comfyui

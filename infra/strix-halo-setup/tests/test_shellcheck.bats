@@ -13,6 +13,18 @@ STRIX="$STRIX_DIR"
     [ "$status" -eq 0 ]
 }
 
+@test "shellcheck: 05-ssh.sh passes" {
+    run shellcheck -s bash -e SC2086,SC2034,SC2155 "$STRIX/components/05-ssh.sh"
+    echo "$output"
+    [ "$status" -eq 0 ]
+}
+
+@test "shellcheck: 07-ssh-hardening.sh passes" {
+    run shellcheck -s bash -e SC2086,SC2034,SC2155 "$STRIX/components/07-ssh-hardening.sh"
+    echo "$output"
+    [ "$status" -eq 0 ]
+}
+
 @test "shellcheck: 10-base.sh passes" {
     run shellcheck -s bash -e SC2086,SC2034,SC2155 "$STRIX/components/10-base.sh"
     echo "$output"
@@ -45,6 +57,12 @@ STRIX="$STRIX_DIR"
 
 @test "shellcheck: 60-security.sh passes" {
     run shellcheck -s bash -e SC2086,SC2034,SC2155 "$STRIX/components/60-security.sh"
+    echo "$output"
+    [ "$status" -eq 0 ]
+}
+
+@test "shellcheck: 62-ddns.sh passes" {
+    run shellcheck -s bash -e SC2086,SC2034,SC2155 "$STRIX/components/62-ddns.sh"
     echo "$output"
     [ "$status" -eq 0 ]
 }

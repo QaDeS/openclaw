@@ -15,6 +15,9 @@ SHARED_MODEL_DIR="/models"
 LOCAL_LLM_URL="http://localhost:1234/v1"
 ACE_STEP_MODEL_URL="https://huggingface.co/Linaqruf/ace-step-1.5-turbo-aio/resolve/main/ace_step_1.5_turbo_aio.safetensors"
 HSA_OVERRIDE="11.5.1"
+SSH_USERS="mk claw"     # Explicit SSH allowlist (space-separated)
+SSH_UPNP_PORT=""         # External UPnP port for SSH; empty = skip UPnP
+DDNS_FQDN=""             # Namecheap DDNS FQDN; empty = skip DDNS
 
 # --- Internal Registry ---
 declare -A COMPONENT_FUNCS
@@ -26,6 +29,14 @@ DRY_RUN=true
 REDOWNLOAD=false
 [[ "$*" == *"--force"* ]] && DRY_RUN=false
 [[ "$*" == *"--redownload"* ]] && REDOWNLOAD=true
+
+# Parse --ssh-upnp-port=PORT and --ddns-fqdn=FQDN
+for arg in "$@"; do
+    case "$arg" in
+        --ssh-upnp-port=*) SSH_UPNP_PORT="${arg#*=}" ;;
+        --ddns-fqdn=*)     DDNS_FQDN="${arg#*=}" ;;
+    esac
+done
 
 # --- Colors & Logging ---
 BLUE='\033[0;34m'
@@ -65,6 +76,69 @@ set_local_llm_url() {
     fi
 }
 
+# Idempotently set an sshd_config directive — replace if exists (commented or not), append if absent.
+set_sshd_directive() {
+    local key=$1 value=$2
+    local config="/etc/ssh/sshd_config"
+    if grep -qE "^#?\s*${key}\b" "$config" 2>/dev/null; then
+        run sed -i "s|^#\?\s*${key}\b.*|${key} ${value}|" "$config"
+    else
+        run tee -a "$config" <<< "${key} ${value}"
+    fi
+}
+
+# Returns 0 if user is in $SSH_USERS (plus $SUDO_USER always implicitly included).
+user_has_ssh() {
+    local user=$1
+    [[ " ${SSH_USERS} ${SUDO_USER:-} " == *" ${user} "* ]]
+}
+
+# Enable SSH for a user by setting up /etc/ssh/users/<user>/.ssh/
+enable_ssh_for_user() {
+    local user=$1
+    user_has_ssh "$user" || return 0
+
+    local ssh_dir="/etc/ssh/users/${user}/.ssh"
+    local user_home
+    user_home=$(getent passwd "$user" | cut -d: -f6)
+
+    run mkdir -p "$ssh_dir"
+    run chown "${user}:${user}" "/etc/ssh/users/${user}" "$ssh_dir"
+    run chmod 700 "/etc/ssh/users/${user}" "$ssh_dir"
+
+    # Migrate existing authorized_keys (merge via sort -u, no data loss)
+    local target="${ssh_dir}/authorized_keys"
+    if [ "$DRY_RUN" = false ]; then
+        if [ -f "${user_home}/.ssh/authorized_keys" ] && [ ! -L "${user_home}/.ssh" ]; then
+            if [ -f "$target" ]; then
+                # Merge existing keys
+                sort -u "${user_home}/.ssh/authorized_keys" "$target" > "${target}.tmp"
+                mv "${target}.tmp" "$target"
+            else
+                cp -n "${user_home}/.ssh/authorized_keys" "$target"
+            fi
+        fi
+        chown "${user}:${user}" "$target" 2>/dev/null || true
+        chmod 600 "$target" 2>/dev/null || true
+    else
+        log "${YELLOW}[DRY-RUN] Will migrate authorized_keys for ${user}${NC}"
+    fi
+
+    # Symlink ~/.ssh → /etc/ssh/users/<user>/.ssh
+    if [ "$DRY_RUN" = false ]; then
+        if [ -L "${user_home}/.ssh" ]; then
+            log "Symlink already exists: ${user_home}/.ssh"
+        elif [ -d "${user_home}/.ssh" ]; then
+            mv "${user_home}/.ssh" "${user_home}/.ssh.bak.$(date +%s)"
+            ln -sf "$ssh_dir" "${user_home}/.ssh"
+        else
+            ln -sf "$ssh_dir" "${user_home}/.ssh"
+        fi
+    else
+        log "${YELLOW}[DRY-RUN] Will symlink ${user_home}/.ssh → ${ssh_dir}${NC}"
+    fi
+}
+
 # --- Plugin Framework ---
 register_component() {
     local id=$1
@@ -79,10 +153,27 @@ register_component() {
 
 check_ssh_safety() {
     log "Verifying SSH persistence..."
-    local user_home=$(getent passwd "$SUDO_USER" | cut -d: -f6)
-    local auth_keys="$user_home/.ssh/authorized_keys"
-    if [[ ! -f "$auth_keys" ]] || [[ ! -s "$auth_keys" ]]; then
-        error "Lockout Protection: No SSH keys found in $auth_keys. Setup aborted."
+    local user_home
+    user_home=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+
+    # Check both the outside-home location and the traditional path (follow symlinks)
+    local outside_keys="/etc/ssh/users/${SUDO_USER}/.ssh/authorized_keys"
+    local home_keys="${user_home}/.ssh/authorized_keys"
+
+    local found=false
+    for auth_keys in "$outside_keys" "$home_keys"; do
+        if [[ -f "$auth_keys" ]] && [[ -s "$auth_keys" ]]; then
+            found=true
+            # Warn on DSA keys (weak) but don't block
+            if grep -q "ssh-dss" "$auth_keys" 2>/dev/null; then
+                warn "DSA key found in $auth_keys — consider upgrading to ed25519"
+            fi
+            break
+        fi
+    done
+
+    if ! $found; then
+        error "Lockout Protection: No SSH keys found for ${SUDO_USER}. Setup aborted."
     fi
 }
 
@@ -111,7 +202,10 @@ is_installed() {
         COMFYUI)   [ -d /home/comfyui/ComfyUI ] && systemctl is-enabled comfyui >/dev/null 2>&1 ;;
         ZIMAGE)    [ -d /home/comfyui/ComfyUI ] && /home/comfyui/.local/bin/uv --no-config pip show accelerate >/dev/null 2>&1 ;;
         ACE_STEP)  [ -d /home/comfyui/ACE-Step-1.5 ] && systemctl is-enabled ace-step >/dev/null 2>&1 ;;
+        SSH_OUTSIDE_HOME) [ -d /etc/ssh/users ] && grep -q "/etc/ssh/users" /etc/ssh/sshd_config 2>/dev/null ;;
+        SSH_HARDENING)    grep -q "PermitRootLogin prohibit-password" /etc/ssh/sshd_config 2>/dev/null && systemctl is-enabled fail2ban >/dev/null 2>&1 ;;
         SECURITY)  [ -f /home/defense/cisco-defense-daemon.py ] && systemctl is-enabled cisco-defense >/dev/null 2>&1 && systemctl is-enabled hosting >/dev/null 2>&1 ;;
+        DDNS)      [ -n "$DDNS_FQDN" ] && docker ps --format '{{.Names}}' 2>/dev/null | grep -q "ddns-${DDNS_FQDN}" ;;
         *)         return 1 ;;
     esac
 }
@@ -203,11 +297,13 @@ show_help() {
 Usage: sudo ./provision_strix_halo.sh [OPTIONS]
 
 Options:
-  --force        Apply changes (default is dry-run)
-  --redownload   Re-download assets even if they already exist
-  --all          Skip menu and install all components
-  --only ID,...  Install specific components (comma-separated IDs)
-  --help, -h     Show this help message
+  --force              Apply changes (default is dry-run)
+  --redownload         Re-download assets even if they already exist
+  --all                Skip menu and install all components
+  --only ID,...        Install specific components (comma-separated IDs)
+  --ssh-upnp-port=PORT External UPnP port for SSH (enables UPnP forwarding)
+  --ddns-fqdn=FQDN    Namecheap DDNS FQDN (enables dynamic DNS)
+  --help, -h           Show this help message
 
 Component IDs:
 HELPEOF
@@ -225,6 +321,9 @@ Access URLs (once provisioned, use ${host} from your laptop):
   ComfyUI            http://${host}:8188
   ACE Step (Music)   http://${host}:7860
   WordPress          http://${host}:8080
+
+Upload models to ComfyUI:
+  rsync -avP -e ssh --rsync-path="sudo -u comfyui rsync" <file> $(logname)@${host}:/home/comfyui/ComfyUI/models/<subdir>/
 URLEOF
     exit 0
 }
@@ -301,6 +400,11 @@ print_urls() {
                 echo -e "  ${GREEN}RDP Desktop${NC}        ssh -L 3389:localhost:3389 ${host}  →  rdp://localhost:3389"
                 any=true
                 ;;
+            SSH_HARDENING)
+                if [ -n "$SSH_UPNP_PORT" ]; then
+                    echo -e "  ${GREEN}SSH (UPnP)${NC}         ssh -p ${SSH_UPNP_PORT} <external-ip>"
+                fi
+                ;;
             LMSTUDIO)
                 echo -e "  ${GREEN}LM Studio API${NC}      http://${host}:1234/v1"
                 any=true
@@ -312,6 +416,7 @@ print_urls() {
                 ;;
             COMFYUI)
                 echo -e "  ${GREEN}ComfyUI${NC}            http://${host}:8188"
+                echo -e "  ${GREEN}Upload models${NC}      rsync -avP -e ssh --rsync-path=\"sudo -u comfyui rsync\" <file> ${host}:/home/comfyui/ComfyUI/models/<subdir>/"
                 any=true
                 ;;
             ACE_STEP)
@@ -321,6 +426,12 @@ print_urls() {
             SECURITY)
                 echo -e "  ${GREEN}WordPress${NC}          http://${host}:8080"
                 any=true
+                ;;
+            DDNS)
+                if [ -n "$DDNS_FQDN" ]; then
+                    echo -e "  ${GREEN}DDNS${NC}               ${DDNS_FQDN}"
+                    any=true
+                fi
                 ;;
         esac
     done

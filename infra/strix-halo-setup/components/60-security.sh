@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # component_name: Security & Hosting
-# component_description: Cisco AI Defense, Web Hosting Stack, and SSH Hardening
+# component_description: Cisco AI Defense and Web Hosting Stack
 
 install_cisco_defense() {
     log "Installing Cisco AI Defense..."
@@ -41,27 +41,4 @@ install_hosting_stack() {
     fi
 }
 
-harden_system() {
-    log "Hardening System SSH and Firewall..."
-    if [ "$DRY_RUN" = false ]; then
-        cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak
-        sed -i 's/^#\?PasswordAuthentication .*/PasswordAuthentication no/' /etc/ssh/sshd_config
-        sed -i 's/^#\?PubkeyAuthentication .*/PubkeyAuthentication yes/' /etc/ssh/sshd_config
-        systemctl restart ssh
-    fi
-
-    # SSH from anywhere (key-only auth enforced above)
-    run ufw allow 22
-
-    # Allow all traffic from private/local networks
-    run ufw allow from 10.0.0.0/8
-    run ufw allow from 172.16.0.0/12
-    run ufw allow from 192.168.0.0/16
-
-    # Tailscale subnet (if using Tailscale for remote LAN-like access)
-    run ufw allow from 100.64.0.0/10
-
-    run ufw --force enable
-}
-
-register_component "SECURITY" "install_cisco_defense" "install_hosting_stack" "harden_system"
+register_component "SECURITY" "install_cisco_defense" "install_hosting_stack"

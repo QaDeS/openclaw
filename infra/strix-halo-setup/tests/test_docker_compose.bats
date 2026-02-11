@@ -57,29 +57,24 @@ print('valid')
     grep -q 'LOCAL_LLM_URL' "$DOCKER_DIR/openclaw-compose.yml"
 }
 
-@test "docker: openclaw-compose bind-mounts LOCAL_REPO_PATH to /app" {
-    grep -q 'LOCAL_REPO_PATH.*:/app' "$DOCKER_DIR/openclaw-compose.yml"
+@test "docker: openclaw-compose mounts /home/claw/openclaw to /app" {
+    grep -q '/home/claw/openclaw:/app' "$DOCKER_DIR/openclaw-compose.yml"
 }
 
 @test "docker: openclaw-compose persists .openclaw config" {
     grep -q '\.openclaw' "$DOCKER_DIR/openclaw-compose.yml"
 }
 
-@test "docker: openclaw-compose uses HOST_UID and HOST_GID" {
-    grep -q 'HOST_UID' "$DOCKER_DIR/openclaw-compose.yml"
-    grep -q 'HOST_GID' "$DOCKER_DIR/openclaw-compose.yml"
-}
-
 @test "docker: openclaw-compose references a Dockerfile" {
     grep -q 'dockerfile:' "$DOCKER_DIR/openclaw-compose.yml"
 }
 
-@test "BUG: openclaw-compose references Dockerfile that does not exist" {
-    # The Dockerfile referenced in the compose file is missing
-    local dockerfile_path
-    dockerfile_path=$(grep 'dockerfile:' "$DOCKER_DIR/openclaw-compose.yml" | awk '{print $2}')
-    # The path is relative to the build context (LOCAL_REPO_PATH), but the file doesn't exist locally
-    [ ! -f "$DOCKER_DIR/Dockerfile" ]
+@test "docker: Dockerfile.openclaw exists" {
+    [ -f "$DOCKER_DIR/Dockerfile.openclaw" ]
+}
+
+@test "docker: openclaw-compose references Dockerfile.openclaw" {
+    grep -q 'Dockerfile.openclaw' "$DOCKER_DIR/openclaw-compose.yml"
 }
 
 @test "docker: openclaw-compose sets restart policy" {

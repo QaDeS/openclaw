@@ -39,10 +39,30 @@ SYSTEMD_DIR="$STRIX_DIR/systemd"
     [ -f "$SYSTEMD_DIR/sync-llama-models.service" ]
 }
 
-@test "systemd: exactly 8 service units exist" {
+@test "systemd: exactly 9 service units exist" {
     local count
     count=$(ls "$SYSTEMD_DIR"/*.service 2>/dev/null | wc -l)
-    [ "$count" -eq 8 ]
+    [ "$count" -eq 9 ]
+}
+
+@test "systemd: upnp-ssh.service exists" {
+    [ -f "$SYSTEMD_DIR/upnp-ssh.service" ]
+}
+
+@test "systemd: upnp-ssh.timer exists" {
+    [ -f "$SYSTEMD_DIR/upnp-ssh.timer" ]
+}
+
+@test "systemd: upnp-ssh.service is Type=oneshot" {
+    grep -q "^Type=oneshot" "$SYSTEMD_DIR/upnp-ssh.service"
+}
+
+@test "systemd: upnp-ssh.service runs upnp-ssh-refresh" {
+    grep -q "upnp-ssh-refresh" "$SYSTEMD_DIR/upnp-ssh.service"
+}
+
+@test "systemd: upnp-ssh.timer wants timers.target" {
+    grep -q "WantedBy=timers.target" "$SYSTEMD_DIR/upnp-ssh.timer"
 }
 
 # --- Required sections ---

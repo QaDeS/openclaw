@@ -58,6 +58,9 @@ setup_mocks() {
     _install_mock mkdir
     _install_mock ln
     _install_mock uv
+    _install_mock sshd
+    _install_mock fail2ban-client
+    _install_mock upnpc
 
     # Make getent return a fake home for testuser
     cat > "$MOCK_BIN/getent" <<'MOCK'
@@ -159,6 +162,9 @@ load_provision_globals() {
     export ACE_STEP_MODEL_URL="https://huggingface.co/Linaqruf/ace-step-1.5-turbo-aio/resolve/main/ace_step_1.5_turbo_aio.safetensors"
     export HSA_OVERRIDE="11.5.1"
     export LOCAL_LLM_URL="http://localhost:1234/v1"
+    export SSH_USERS="testuser"
+    export SSH_UPNP_PORT=""
+    export DDNS_FQDN=""
 
     $_REAL_MKDIR -p "$SHARED_MODEL_DIR"
 
@@ -226,7 +232,12 @@ load_provision_globals() {
         fi
     }
 
-    export -f log warn success error run register_component confirm_execution ensure_user is_installed set_local_llm_url
+    # SSH helpers (stubs matching provision_strix_halo.sh signatures)
+    set_sshd_directive() { log "set_sshd_directive $1 $2"; }
+    user_has_ssh() { [[ " $SSH_USERS ${SUDO_USER:-} " == *" $1 "* ]]; }
+    enable_ssh_for_user() { log "enable_ssh_for_user $1"; }
+
+    export -f log warn success error run register_component confirm_execution ensure_user is_installed set_local_llm_url set_sshd_directive user_has_ssh enable_ssh_for_user
 }
 
 # capture — Run a function and capture its output + exit status.

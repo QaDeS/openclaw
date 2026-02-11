@@ -24,9 +24,10 @@ install_ace_step() {
     fi
 
     if [ "$DRY_RUN" = false ]; then
-        # 2. Create an isolated venv via uv (avoids python3-venv apt dep)
+        # 2. Create an isolated Python 3.11 venv via uv.
+        #    ACE-Step requires python ==3.11.*; uv auto-downloads the interpreter.
         local UV="/home/comfyui/.local/bin/uv"
-        sudo -u comfyui "$UV" --no-config venv "${ACE_STEP_VENV}"
+        sudo -u comfyui "$UV" --no-config venv --seed --python 3.11 "${ACE_STEP_VENV}"
         local PIP="${ACE_STEP_VENV}/bin/pip"
         local PYTHON="${ACE_STEP_VENV}/bin/python"
 

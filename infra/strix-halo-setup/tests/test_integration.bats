@@ -14,7 +14,7 @@ teardown() {
 
 # --- All components load without error ---
 
-@test "integration: all 9 components source without error" {
+@test "integration: all 12 components source without error" {
     for f in "$STRIX_DIR"/components/*.sh; do
         source "$f"
     done
@@ -22,19 +22,19 @@ teardown() {
     [ ${#COMPONENT_LIST[@]} -ge 1 ]
 }
 
-@test "integration: after sourcing all components, COMPONENT_LIST has 9 entries" {
+@test "integration: after sourcing all components, COMPONENT_LIST has 12 entries" {
     for f in "$STRIX_DIR"/components/*.sh; do
         source "$f"
     done
     echo "COMPONENT_LIST: ${COMPONENT_LIST[*]}"
-    [ ${#COMPONENT_LIST[@]} -eq 9 ]
+    [ ${#COMPONENT_LIST[@]} -eq 12 ]
 }
 
 @test "integration: after sourcing all components, expected IDs are registered" {
     for f in "$STRIX_DIR"/components/*.sh; do
         source "$f"
     done
-    for expected in BASE OPENCLAW LMSTUDIO LLAMACPP SYNC_LLAMA COMFYUI ZIMAGE ACE_STEP SECURITY; do
+    for expected in SSH_OUTSIDE_HOME SSH_HARDENING BASE OPENCLAW LMSTUDIO LLAMACPP SYNC_LLAMA COMFYUI ZIMAGE ACE_STEP SECURITY DDNS; do
         [[ " ${COMPONENT_LIST[*]} " == *" $expected "* ]] || {
             echo "Missing component: $expected"
             return 1
@@ -77,19 +77,19 @@ teardown() {
 
 # --- Component ordering ---
 
-@test "integration: BASE component is first in load order" {
+@test "integration: SSH_OUTSIDE_HOME component is first in load order" {
     for f in "$STRIX_DIR"/components/*.sh; do
         source "$f"
     done
-    [ "${COMPONENT_LIST[0]}" = "BASE" ]
+    [ "${COMPONENT_LIST[0]}" = "SSH_OUTSIDE_HOME" ]
 }
 
-@test "integration: SECURITY component is last in load order" {
+@test "integration: DDNS component is last in load order" {
     for f in "$STRIX_DIR"/components/*.sh; do
         source "$f"
     done
     local last_idx=$(( ${#COMPONENT_LIST[@]} - 1 ))
-    [ "${COMPONENT_LIST[$last_idx]}" = "SECURITY" ]
+    [ "${COMPONENT_LIST[$last_idx]}" = "DDNS" ]
 }
 
 # --- Cross-component consistency ---
@@ -120,7 +120,7 @@ teardown() {
 
 @test "integration: every systemd service is deployed by its own component (not base)" {
     local non_base_components
-    non_base_components=$(cat "$STRIX_DIR"/components/[2-9]*.sh)
+    non_base_components=$(cat "$STRIX_DIR"/components/[02-9]*.sh)
     for service_file in "$STRIX_DIR"/systemd/*.service; do
         local service_name
         service_name=$(basename "$service_file" .service)

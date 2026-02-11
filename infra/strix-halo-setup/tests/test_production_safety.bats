@@ -51,12 +51,12 @@ teardown() {
     done
 }
 
-@test "force-mode: SECURITY executes all 3 sub-functions" {
+@test "force-mode: SECURITY executes all 2 sub-functions" {
     DRY_RUN=false
     local funcs="${COMPONENT_FUNCS[SECURITY]}"
     local count
     count=$(echo "$funcs" | wc -w)
-    [ "$count" -eq 3 ]
+    [ "$count" -eq 2 ]
     for func in $funcs; do
         capture "$func"
         [ "$_status" -eq 0 ] || {

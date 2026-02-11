@@ -19,18 +19,17 @@ teardown() {
     [[ " ${COMPONENT_LIST[*]} " == *" SECURITY "* ]]
 }
 
-@test "security: registers 3 functions" {
+@test "security: registers 2 functions" {
     local funcs="${COMPONENT_FUNCS[SECURITY]}"
     local count
     count=$(echo "$funcs" | wc -w)
-    [ "$count" -eq 3 ]
+    [ "$count" -eq 2 ]
 }
 
-@test "security: registered functions are install_cisco_defense, install_hosting_stack, harden_system" {
+@test "security: registered functions are install_cisco_defense, install_hosting_stack" {
     local funcs="${COMPONENT_FUNCS[SECURITY]}"
     [[ "$funcs" == *"install_cisco_defense"* ]]
     [[ "$funcs" == *"install_hosting_stack"* ]]
-    [[ "$funcs" == *"harden_system"* ]]
 }
 
 # --- install_cisco_defense (dry-run) ---
@@ -89,50 +88,10 @@ teardown() {
     grep -q 'command -v docker' "$STRIX_DIR/components/60-security.sh"
 }
 
-# --- harden_system (dry-run) ---
-
-@test "security: harden_system runs in dry-run without errors" {
-    DRY_RUN=true
-    capture harden_system
-    [ "$_status" -eq 0 ]
-}
-
-@test "security: harden_system would enable UFW in dry-run" {
-    DRY_RUN=true
-    capture harden_system
-    [[ "$_output" == *"ufw"*"enable"* ]]
-}
-
-@test "security: harden_system would allow SSH port 22" {
-    DRY_RUN=true
-    capture harden_system
-    [[ "$_output" == *"ufw"*"22"* ]]
-}
-
-@test "security: harden_system would allow LAN subnets" {
-    DRY_RUN=true
-    capture harden_system
-    [[ "$_output" == *"ufw"*"192.168.0.0/16"* ]]
-    [[ "$_output" == *"ufw"*"10.0.0.0/8"* ]]
-    [[ "$_output" == *"ufw"*"172.16.0.0/12"* ]]
-}
-
 # --- Script content checks ---
 
 @test "security: component_name header is Security & Hosting" {
     grep -q "^# component_name: Security & Hosting" "$STRIX_DIR/components/60-security.sh"
-}
-
-@test "security: SSH hardening disables password auth" {
-    grep -q "PasswordAuthentication no" "$STRIX_DIR/components/60-security.sh"
-}
-
-@test "security: SSH hardening enables pubkey auth" {
-    grep -q "PubkeyAuthentication yes" "$STRIX_DIR/components/60-security.sh"
-}
-
-@test "security: SSH hardening backs up sshd_config" {
-    grep -q "sshd_config.bak" "$STRIX_DIR/components/60-security.sh"
 }
 
 @test "security: hosting uses openssl for password generation" {
