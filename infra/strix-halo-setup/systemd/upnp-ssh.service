@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh UPnP SSH port mapping
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/upnp-ssh-refresh
+
+[Install]
+WantedBy=multi-user.target

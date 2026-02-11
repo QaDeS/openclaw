@@ -1,0 +1,10 @@
+[Unit]
+Description=Periodic UPnP SSH port mapping refresh
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=30min
+Unit=upnp-ssh.service
+
+[Install]
+WantedBy=timers.target
