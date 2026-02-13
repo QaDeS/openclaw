@@ -130,17 +130,16 @@ teardown() {
     grep -q 'ROCM_VERSION' "$STRIX_DIR/components/10-base.sh"
 }
 
-@test "base: xorg config creates 4K resolution" {
-    grep -q "3840x2160" "$STRIX_DIR/components/10-base.sh"
+@test "base: xorg config removes forced driver configs (auto-detect)" {
+    grep -q "rm -f.*xorg.conf.d" "$STRIX_DIR/components/10-base.sh"
 }
 
-@test "base: xorg config targets GFX1151" {
-    grep -q "GFX1151" "$STRIX_DIR/components/10-base.sh"
+@test "base: xorg installs amdgpu driver package" {
+    grep -q "xserver-xorg-video-amdgpu" "$STRIX_DIR/components/10-base.sh"
 }
 
 @test "base: GTT size uses half of system RAM" {
-    grep -q 'total_mem.*/ 2' "$STRIX_DIR/components/10-base.sh" || \
-    grep -q 'gtt_size=$((total_mem / 2))' "$STRIX_DIR/components/10-base.sh"
+    grep -qE 'total_mem.*(/ 2|\* 1024 / 2)' "$STRIX_DIR/components/10-base.sh"
 }
 
 # --- Script content: ROCm codename detection ---

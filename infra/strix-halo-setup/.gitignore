@@ -1,0 +1,2 @@
+# Download cache (populated by provisioning or scripts/populate-cache.sh)
+.cache/

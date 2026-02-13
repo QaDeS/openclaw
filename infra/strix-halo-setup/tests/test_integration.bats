@@ -14,7 +14,7 @@ teardown() {
 
 # --- All components load without error ---
 
-@test "integration: all 12 components source without error" {
+@test "integration: all 13 components source without error" {
     for f in "$STRIX_DIR"/components/*.sh; do
         source "$f"
     done
@@ -22,19 +22,19 @@ teardown() {
     [ ${#COMPONENT_LIST[@]} -ge 1 ]
 }
 
-@test "integration: after sourcing all components, COMPONENT_LIST has 12 entries" {
+@test "integration: after sourcing all components, COMPONENT_LIST has 13 entries" {
     for f in "$STRIX_DIR"/components/*.sh; do
         source "$f"
     done
     echo "COMPONENT_LIST: ${COMPONENT_LIST[*]}"
-    [ ${#COMPONENT_LIST[@]} -eq 12 ]
+    [ ${#COMPONENT_LIST[@]} -eq 13 ]
 }
 
 @test "integration: after sourcing all components, expected IDs are registered" {
     for f in "$STRIX_DIR"/components/*.sh; do
         source "$f"
     done
-    for expected in SSH_OUTSIDE_HOME SSH_HARDENING BASE OPENCLAW LMSTUDIO LLAMACPP SYNC_LLAMA COMFYUI ZIMAGE ACE_STEP SECURITY DDNS; do
+    for expected in SSH_OUTSIDE_HOME SSH_HARDENING BASE PODMAN OPENCLAW LMSTUDIO LLAMACPP SYNC_LLAMA COMFYUI ZIMAGE ACE_STEP SECURITY DDNS; do
         [[ " ${COMPONENT_LIST[*]} " == *" $expected "* ]] || {
             echo "Missing component: $expected"
             return 1
@@ -120,10 +120,14 @@ teardown() {
 
 @test "integration: every systemd service is deployed by its own component (not base)" {
     local non_base_components
-    non_base_components=$(cat "$STRIX_DIR"/components/[02-9]*.sh)
+    non_base_components=$(cat "$STRIX_DIR"/components/[01-9]*.sh)
     for service_file in "$STRIX_DIR"/systemd/*.service; do
         local service_name
         service_name=$(basename "$service_file" .service)
+        # hosting and openclaw are now managed via Podman Quadlet (not systemd unit copy)
+        case "$service_name" in
+            hosting|openclaw) continue ;;
+        esac
         echo "$non_base_components" | grep -q "cp.*${service_name}.service.*/etc/systemd/system/" || {
             echo "No component deploys service file: $service_name"
             return 1
@@ -145,14 +149,14 @@ teardown() {
     done
 }
 
-# --- Docker compose file references ---
+# --- Container config references ---
 
-@test "integration: openclaw-compose.yml is referenced in LLM component" {
-    grep -q "openclaw-compose.yml" "$STRIX_DIR/components/20-llm-stack.sh"
+@test "integration: openclaw quadlet is referenced in LLM component" {
+    grep -q "quadlet/openclaw.container\|openclaw.container" "$STRIX_DIR/components/20-llm-stack.sh"
 }
 
-@test "integration: hosting-compose.yml is referenced in security component" {
-    grep -q "hosting-compose.yml" "$STRIX_DIR/components/60-security.sh"
+@test "integration: hosting quadlet files are referenced in security component" {
+    grep -q "quadlet" "$STRIX_DIR/components/60-security.sh"
 }
 
 # --- Defense daemon references ---

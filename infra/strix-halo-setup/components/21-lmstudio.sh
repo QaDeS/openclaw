@@ -12,7 +12,7 @@ install_lmstudio() {
             local attempt
             for attempt in 1 2 3; do
                 log "LM Studio install attempt ${attempt}/3..."
-                if sudo -u lmstudio bash -c 'curl -fsSL https://lmstudio.ai/install.sh | bash'; then
+                if sudo -u lmstudio bash -c "source '${INFRA_DIR}/lib/cache-helpers.sh' && cached_curl_pipe 'https://lmstudio.ai/install.sh' bash"; then
                     break
                 fi
                 if [ "$attempt" -lt 3 ]; then
@@ -29,8 +29,10 @@ install_lmstudio() {
         sudo -u lmstudio ln -sf ${SHARED_MODEL_DIR} /home/lmstudio/.cache/lm-studio/models
     fi
     run cp ${INFRA_DIR}/systemd/llmster.service /etc/systemd/system/llmster.service
+    track_file_create /etc/systemd/system/llmster.service
     run systemctl daemon-reload
     run systemctl enable llmster
+    track_service llmster
     set_local_llm_url "http://localhost:1234/v1"
 }
 

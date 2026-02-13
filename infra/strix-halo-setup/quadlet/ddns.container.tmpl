@@ -1,0 +1,16 @@
+[Unit]
+Description=Namecheap DDNS for %FQDN%
+
+[Container]
+Image=linuxshots/namecheap-ddns
+ContainerName=ddns-%FQDN%
+Environment=DOMAIN=%DOMAIN%
+Environment=HOST=%HOST%
+Environment=PASSWORD=%PASSWORD%
+AutoUpdate=registry
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # component_name: Dynamic DNS
-# component_description: Namecheap DDNS via Docker container
+# component_description: Namecheap DDNS via Podman Quadlet
 
 install_ddns() {
     # Early return if DDNS_FQDN is empty
@@ -15,9 +15,6 @@ install_ddns() {
     # Create ddns user at /home/ddns
     if ! id ddns &>/dev/null; then
         run useradd -m -d /home/ddns -s /bin/bash ddns
-    fi
-    if command -v docker &>/dev/null; then
-        run usermod -aG docker ddns
     fi
 
     # Create secrets directory
@@ -51,23 +48,30 @@ install_ddns() {
             return 0
         fi
 
-        # Stop + rm existing container (idempotent)
+        # Deploy quadlet file from template
+        local quadlet_dir="/home/ddns/.config/containers/systemd"
+        local tmpl="${INFRA_DIR}/quadlet/ddns.container.tmpl"
         local container_name="ddns-${DDNS_FQDN}"
-        docker stop "$container_name" 2>/dev/null || true
-        docker rm "$container_name" 2>/dev/null || true
+        local quadlet_file="${quadlet_dir}/${container_name}.container"
 
-        # Run DDNS container
-        docker run -d \
-            --name "$container_name" \
-            --restart always \
-            -e DOMAIN="$domain_part" \
-            -e HOST="$host_part" \
-            -e PASSWORD="$ddns_secret" \
-            linuxshots/namecheap-ddns
+        mkdir -p "$quadlet_dir"
+        sed -e "s|%FQDN%|${DDNS_FQDN}|g" \
+            -e "s|%DOMAIN%|${domain_part}|g" \
+            -e "s|%HOST%|${host_part}|g" \
+            -e "s|%PASSWORD%|${ddns_secret}|g" \
+            "$tmpl" > "$quadlet_file"
 
-        success "DDNS container started: ${container_name}"
+        chown -R ddns:ddns /home/ddns/.config
+        track_file_create "$quadlet_file"
+        track_podman "$container_name" "linuxshots/namecheap-ddns"
+
+        ensure_linger ddns
+        sudo -u ddns systemctl --user daemon-reload
+        sudo -u ddns systemctl --user enable --now "${container_name}.service"
+
+        success "DDNS quadlet deployed: ${container_name}"
     else
-        log "${YELLOW}[DRY-RUN] Will deploy DDNS container for ${DDNS_FQDN}${NC}"
+        log "${YELLOW}[DRY-RUN] Will deploy DDNS quadlet for ${DDNS_FQDN}${NC}"
     fi
 }
 

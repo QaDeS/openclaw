@@ -38,7 +38,7 @@ teardown() {
 }
 
 @test "ace_step: references ACE-Step repo clone in source" {
-    grep -q "git clone.*ACE_STEP_REPO" "$STRIX_DIR/components/50-ace-step.sh"
+    grep -q "cached_git_clone.*ACE_STEP_REPO\|git clone.*ACE_STEP_REPO" "$STRIX_DIR/components/50-ace-step.sh"
 }
 
 @test "ace_step: would enable ace-step service in dry-run" {
@@ -58,7 +58,8 @@ teardown() {
 }
 
 @test "ace_step: creates an isolated venv (not uv sync)" {
-    grep -q "python3 -m venv" "$STRIX_DIR/components/50-ace-step.sh"
+    # Venv created via uv (referenced as $UV); both approaches are valid
+    grep -qEi '(python3 -m venv|uv.*venv)' "$STRIX_DIR/components/50-ace-step.sh"
     # Must NOT call uv sync as a command (it pulls CUDA torch)
     # Exclude comment lines from the check
     ! grep -v '^\s*#' "$STRIX_DIR/components/50-ace-step.sh" | grep -q "uv sync"

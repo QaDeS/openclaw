@@ -7,8 +7,8 @@ setup_ssh_outside_home() {
     log "Setting up SSH outside encrypted home..."
     run mkdir -p /etc/ssh/users
 
-    # Back up sshd_config (no-clobber, idempotent)
-    run cp -n /etc/ssh/sshd_config /etc/ssh/sshd_config.pre-strix
+    # Back up sshd_config (timestamped, idempotent within run)
+    backup_file /etc/ssh/sshd_config
 
     # Configure sshd to look in /etc/ssh/users/%u/.ssh/ first, with fallback
     set_sshd_directive AuthorizedKeysFile "/etc/ssh/users/%u/.ssh/authorized_keys .ssh/authorized_keys"
@@ -26,7 +26,8 @@ setup_ssh_outside_home() {
             systemctl reload ssh 2>/dev/null || systemctl reload sshd 2>/dev/null || true
         else
             warn "sshd -t failed; reverting sshd_config from backup"
-            cp /etc/ssh/sshd_config.pre-strix /etc/ssh/sshd_config
+            local flat_backup="${BACKUP_DIR}/etc-ssh-sshd_config"
+            [ -f "$flat_backup" ] && cp "$flat_backup" /etc/ssh/sshd_config
         fi
     fi
 }
@@ -37,6 +38,7 @@ install_ssh_user_hook() {
     # Deploy the hook script
     run cp "${INFRA_DIR}/scripts/setup-ssh-for-user.sh" /usr/local/sbin/setup-ssh-for-user
     run chmod 755 /usr/local/sbin/setup-ssh-for-user
+    track_file_create /usr/local/sbin/setup-ssh-for-user
 
     # Wire into adduser.local (append only if not present)
     if [ "$DRY_RUN" = false ]; then
@@ -44,8 +46,12 @@ install_ssh_user_hook() {
         if [ ! -f "$hook_file" ]; then
             echo '#!/bin/bash' | tee "$hook_file" >/dev/null
             chmod 755 "$hook_file"
+            track_file_create "$hook_file"
         fi
         if ! grep -q "setup-ssh-for-user" "$hook_file" 2>/dev/null; then
+            track_append "$hook_file" "setup-ssh-for-user"
+            # $1 is intentionally literal (expanded by adduser at runtime)
+            # shellcheck disable=SC2016
             echo '/usr/local/sbin/setup-ssh-for-user "$1"' | tee -a "$hook_file" >/dev/null
         fi
     else
@@ -67,6 +73,7 @@ if command -v ecryptfs-mount-private &>/dev/null; then
 fi
 PROFILE
         chmod 644 /etc/profile.d/ecryptfs-mount.sh
+        track_file_create /etc/profile.d/ecryptfs-mount.sh
     else
         log "${YELLOW}[DRY-RUN] Will deploy /etc/profile.d/ecryptfs-mount.sh${NC}"
     fi
@@ -76,6 +83,7 @@ PROFILE
         local logout_file="/etc/bash.bash_logout"
         local marker="# strix-ecryptfs-umount"
         if ! grep -q "$marker" "$logout_file" 2>/dev/null; then
+            track_append "$logout_file" "$marker"
             cat <<LOGOUT | tee -a "$logout_file" >/dev/null
 $marker
 # Umount encrypted home on last session

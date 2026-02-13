@@ -15,6 +15,8 @@ SHARED_MODEL_DIR="/models"
 LOCAL_LLM_URL="http://localhost:1234/v1"
 ACE_STEP_MODEL_URL="https://huggingface.co/Linaqruf/ace-step-1.5-turbo-aio/resolve/main/ace_step_1.5_turbo_aio.safetensors"
 HSA_OVERRIDE="11.5.1"
+CACHE_DIR="${INFRA_DIR}/.cache"  # Download cache dir; default alongside provision script
+NO_CACHE=false           # Set to true to disable caching entirely
 SSH_USERS="mk claw"     # Explicit SSH allowlist (space-separated)
 SSH_UPNP_PORT=""         # External UPnP port for SSH; empty = skip UPnP
 DDNS_FQDN=""             # Namecheap DDNS FQDN; empty = skip DDNS
@@ -25,18 +27,45 @@ declare -A COMPONENT_NAMES
 COMPONENT_LIST=()
 INSTALL_MODES=()
 
+# --- Backup / Undo State ---
+STATE_DIR="/var/lib/strix-provision"
+RUN_TS=""
+BACKUP_DIR=""
+MANIFEST_FILE=""
+CURRENT_COMPONENT=""
+DO_UNDO=false
+UNDO_TARGET=""
+DO_HISTORY=false
+
 DRY_RUN=true
 REDOWNLOAD=false
-[[ "$*" == *"--force"* ]] && DRY_RUN=false
-[[ "$*" == *"--redownload"* ]] && REDOWNLOAD=true
 
-# Parse --ssh-upnp-port=PORT and --ddns-fqdn=FQDN
+# Parse all CLI flags
 for arg in "$@"; do
     case "$arg" in
-        --ssh-upnp-port=*) SSH_UPNP_PORT="${arg#*=}" ;;
-        --ddns-fqdn=*)     DDNS_FQDN="${arg#*=}" ;;
+        --force)             DRY_RUN=false ;;
+        --redownload)        REDOWNLOAD=true ;;
+        --cache-dir=*)       CACHE_DIR="${arg#*=}" ;;
+        --no-cache)          NO_CACHE=true ;;
+        --ssh-upnp-port=*)   SSH_UPNP_PORT="${arg#*=}" ;;
+        --ddns-fqdn=*)       DDNS_FQDN="${arg#*=}" ;;
+        --history)           DO_HISTORY=true ;;
+        --undo)              DO_UNDO=true ;;
+        --undo=*)            DO_UNDO=true; UNDO_TARGET="${arg#*=}" ;;
     esac
 done
+
+# Disable cache if --no-cache was passed
+if [ "$NO_CACHE" = true ]; then
+    CACHE_DIR=""
+fi
+
+export CACHE_DIR
+
+# Source cache-aware download helpers
+if [ -f "${INFRA_DIR}/lib/cache-helpers.sh" ]; then
+    source "${INFRA_DIR}/lib/cache-helpers.sh"
+fi
 
 # --- Colors & Logging ---
 BLUE='\033[0;34m'
@@ -55,6 +84,297 @@ run() {
         log "${YELLOW}[DRY-RUN] Will execute:${NC} $*"
     else
         "$@"
+    fi
+}
+
+# --- Backup / Undo Helpers ---
+
+# Initialise state dirs and manifest for this run.
+init_run_state() {
+    RUN_TS=$(date +%Y%m%d-%H%M%S)
+    BACKUP_DIR="${STATE_DIR}/backups/${RUN_TS}"
+    MANIFEST_FILE="${STATE_DIR}/manifests/${RUN_TS}.manifest"
+
+    if [ "$DRY_RUN" = true ]; then
+        log "Run state: ts=${RUN_TS} (dry-run, no state files created)"
+        return
+    fi
+
+    mkdir -p "${BACKUP_DIR}" "${STATE_DIR}/manifests"
+    {
+        echo "# STRIX_RUN_MANIFEST v1"
+        echo "# timestamp: ${RUN_TS}"
+        echo "# user: ${SUDO_USER:-root}"
+        # components line filled in later by main()
+    } > "$MANIFEST_FILE"
+    log "Run state: ts=${RUN_TS}  manifest=${MANIFEST_FILE}"
+}
+
+# Append a tab-separated record to the manifest.
+manifest_record() {
+    [ "$DRY_RUN" = true ] && return
+    local IFS=$'\t'
+    echo "$*" >> "$MANIFEST_FILE"
+}
+
+# Back up a file into the run's backup dir. Idempotent within a run.
+backup_file() {
+    local src="$1"
+    [ -f "$src" ] || return 0
+    local flat
+    flat=$(echo "$src" | sed 's|^/||; s|/|-|g')
+    local dest="${BACKUP_DIR}/${flat}"
+    if [ "$DRY_RUN" = true ]; then
+        log "[DRY-RUN] Would back up ${src} → ${dest}"
+        return
+    fi
+    # Idempotent: skip if already backed up this run
+    [ -f "$dest" ] && return 0
+    cp -a "$src" "$dest"
+    manifest_record "backup_file" "${CURRENT_COMPONENT}" "$src" "$dest"
+    log "Backed up ${src}"
+}
+
+# Record that a file was created by this run.
+track_file_create() {
+    local path="$1"
+    log "Tracking file create: ${path}"
+    manifest_record "create_file" "${CURRENT_COMPONENT}" "$path"
+}
+
+# Back up then record modification of an existing file.
+track_file_modify() {
+    local path="$1"
+    backup_file "$path"
+    manifest_record "modify_file" "${CURRENT_COMPONENT}" "$path"
+}
+
+# Record a systemd service enablement.
+track_service() {
+    local unit="$1"
+    manifest_record "enable_service" "${CURRENT_COMPONENT}" "$unit"
+}
+
+# Record a symlink creation.
+track_symlink() {
+    local link="$1" target="$2"
+    manifest_record "create_symlink" "${CURRENT_COMPONENT}" "$link" "$target"
+}
+
+# Record a UFW rule.
+track_ufw_rule() {
+    local spec="$*"
+    manifest_record "add_ufw_rule" "${CURRENT_COMPONENT}" "$spec"
+}
+
+# Record a Docker container.
+track_docker() {
+    local container="$1" image="$2"
+    manifest_record "docker_container" "${CURRENT_COMPONENT}" "$container" "$image"
+}
+
+# Back up a file and record a marker-guarded append.
+track_append() {
+    local file="$1" marker="$2"
+    backup_file "$file"
+    manifest_record "append_block" "${CURRENT_COMPONENT}" "$file" "$marker"
+}
+
+# Record a non-reversible action (emits warning on undo).
+undo_note() {
+    local msg="$*"
+    manifest_record "undo_note" "${CURRENT_COMPONENT}" "$msg"
+}
+
+# --- History & Undo ---
+
+# List all past runs with their status and components.
+show_history() {
+    local manifest_dir="${STATE_DIR}/manifests"
+    if [ ! -d "$manifest_dir" ] || [ -z "$(ls -A "$manifest_dir" 2>/dev/null)" ]; then
+        log "No provisioning runs recorded yet."
+        return 0
+    fi
+
+    echo ""
+    echo -e "${BLUE}=== Provisioning History ===${NC}"
+    printf "  %-20s %-10s %-10s %s\n" "TIMESTAMP" "STATUS" "USER" "COMPONENTS"
+    printf "  %-20s %-10s %-10s %s\n" "---------" "------" "----" "----------"
+
+    for mf in "$manifest_dir"/*.manifest; do
+        [ -f "$mf" ] || continue
+        local ts
+        ts=$(basename "$mf" .manifest)
+        local status="applied"
+        [ -f "${mf}.undone" ] && status="undone"
+        local user=""
+        user=$(grep "^# user:" "$mf" | head -1 | cut -d: -f2- | xargs)
+        local components=""
+        components=$(grep "^# components:" "$mf" | head -1 | cut -d: -f2- | xargs)
+        printf "  %-20s %-10s %-10s %s\n" "$ts" "$status" "$user" "$components"
+    done
+    echo ""
+}
+
+# Find the most recent manifest that hasn't been undone.
+find_latest_manifest() {
+    local manifest_dir="${STATE_DIR}/manifests"
+    local latest=""
+    for mf in "$manifest_dir"/*.manifest; do
+        [ -f "$mf" ] || continue
+        [ -f "${mf}.undone" ] && continue
+        latest="$mf"
+    done
+    echo "$latest"
+}
+
+# Resolve a manifest by timestamp or "latest".
+resolve_manifest() {
+    local target="$1"
+    if [ -z "$target" ] || [ "$target" = "latest" ]; then
+        find_latest_manifest
+    else
+        local mf="${STATE_DIR}/manifests/${target}.manifest"
+        [ -f "$mf" ] && echo "$mf"
+    fi
+}
+
+# Undo a provisioning run by reading its manifest in reverse.
+do_undo() {
+    local mf
+    mf=$(resolve_manifest "$UNDO_TARGET")
+    if [ -z "$mf" ] || [ ! -f "$mf" ]; then
+        error "No manifest found for '${UNDO_TARGET:-latest}'. Run --history to see available runs."
+    fi
+    if [ -f "${mf}.undone" ]; then
+        error "Run $(basename "$mf" .manifest) has already been undone."
+    fi
+
+    local ts
+    ts=$(basename "$mf" .manifest)
+    log "Undoing run ${ts} ..."
+
+    if [ "$DRY_RUN" = true ]; then
+        log "[DRY-RUN] Would undo the following actions:"
+    fi
+
+    # Read manifest lines (skip comments), reverse order
+    local lines=()
+    while IFS= read -r line; do
+        [[ "$line" =~ ^# ]] && continue
+        [[ -z "$line" ]] && continue
+        lines+=("$line")
+    done < "$mf"
+
+    # Process in reverse
+    local i
+    for (( i=${#lines[@]}-1; i>=0; i-- )); do
+        local line="${lines[$i]}"
+        local action component arg1 arg2
+        IFS=$'\t' read -r action component arg1 arg2 <<< "$line"
+
+        case "$action" in
+            backup_file)
+                # arg1=original path, arg2=backup path — restore
+                if [ "$DRY_RUN" = true ]; then
+                    log "[DRY-RUN] Restore ${arg2} → ${arg1}"
+                else
+                    if [ -f "$arg2" ]; then
+                        cp -a "$arg2" "$arg1"
+                        log "Restored ${arg1} from backup"
+                    else
+                        warn "Backup missing: ${arg2} — cannot restore ${arg1}"
+                    fi
+                fi
+                ;;
+            create_file)
+                # arg1=path — remove if it exists
+                if [ "$DRY_RUN" = true ]; then
+                    log "[DRY-RUN] Remove created file ${arg1}"
+                else
+                    if [ -f "$arg1" ]; then
+                        rm -f "$arg1"
+                        log "Removed ${arg1}"
+                    fi
+                fi
+                ;;
+            create_symlink)
+                # arg1=link path — remove symlink
+                if [ "$DRY_RUN" = true ]; then
+                    log "[DRY-RUN] Remove symlink ${arg1}"
+                else
+                    if [ -L "$arg1" ]; then
+                        rm -f "$arg1"
+                        log "Removed symlink ${arg1}"
+                    fi
+                fi
+                ;;
+            enable_service)
+                # arg1=unit — disable and stop
+                if [ "$DRY_RUN" = true ]; then
+                    log "[DRY-RUN] Disable and stop service ${arg1}"
+                else
+                    systemctl disable "$arg1" 2>/dev/null || true
+                    systemctl stop "$arg1" 2>/dev/null || true
+                    log "Disabled service ${arg1}"
+                fi
+                ;;
+            add_ufw_rule)
+                # arg1=rule spec — delete the rule
+                if [ "$DRY_RUN" = true ]; then
+                    log "[DRY-RUN] Delete UFW rule: ${arg1}"
+                else
+                    ufw delete "$arg1" 2>/dev/null || warn "Could not delete UFW rule: ${arg1}"
+                    log "Deleted UFW rule: ${arg1}"
+                fi
+                ;;
+            docker_container|podman_container)
+                # arg1=container name — stop and remove
+                if [ "$DRY_RUN" = true ]; then
+                    log "[DRY-RUN] Stop and remove container ${arg1}"
+                else
+                    # Try podman first, fall back to docker
+                    if command -v podman &>/dev/null; then
+                        podman stop "$arg1" 2>/dev/null || true
+                        podman rm "$arg1" 2>/dev/null || true
+                    elif command -v docker &>/dev/null; then
+                        docker stop "$arg1" 2>/dev/null || true
+                        docker rm "$arg1" 2>/dev/null || true
+                    fi
+                    log "Removed container ${arg1}"
+                fi
+                ;;
+            append_block)
+                # arg1=file, arg2=marker — backup was already taken, remove marker block
+                # Restoring from backup_file entry handles this
+                ;;
+            modify_file)
+                # Restoring handled by backup_file entry
+                ;;
+            undo_note)
+                warn "Non-reversible: ${arg1}"
+                ;;
+        esac
+    done
+
+    # Validate SSH config after undo (if any SSH-related backups were restored)
+    if grep -q "sshd_config" "$mf" 2>/dev/null; then
+        if [ "$DRY_RUN" = false ]; then
+            if sshd -t 2>/dev/null; then
+                log "SSH config validated OK after undo"
+                systemctl reload ssh 2>/dev/null || systemctl reload sshd 2>/dev/null || true
+            else
+                warn "sshd -t failed after undo — SSH config may need manual repair"
+            fi
+        fi
+    fi
+
+    # Write .undone sidecar
+    if [ "$DRY_RUN" = false ]; then
+        echo "Undone at $(date -Is) by ${SUDO_USER:-root}" > "${mf}.undone"
+        success "Run ${ts} has been undone."
+    else
+        log "[DRY-RUN] Would mark run ${ts} as undone"
     fi
 }
 
@@ -139,6 +459,32 @@ enable_ssh_for_user() {
     fi
 }
 
+# --- Podman / Quadlet Helpers ---
+
+# Enable linger for a user so rootless podman services survive logout.
+ensure_linger() {
+    local user=$1
+    if ! loginctl show-user "$user" -p Linger 2>/dev/null | grep -q "yes"; then
+        run loginctl enable-linger "$user"
+    fi
+}
+
+# Deploy a quadlet file to a user's systemd directory and reload.
+deploy_quadlet() {
+    local user=$1 src=$2
+    local dest="/home/${user}/.config/containers/systemd/$(basename "$src")"
+    run mkdir -p "$(dirname "$dest")"
+    run cp "$src" "$dest"
+    run chown "${user}:${user}" "$(dirname "$(dirname "$(dirname "$dest")")")" -R
+    track_file_create "$dest"
+}
+
+# Record a podman container for undo tracking (replaces track_docker).
+track_podman() {
+    local container="$1" image="$2"
+    manifest_record "podman_container" "${CURRENT_COMPONENT}" "$container" "$image"
+}
+
 # --- Plugin Framework ---
 register_component() {
     local id=$1
@@ -205,7 +551,8 @@ is_installed() {
         SSH_OUTSIDE_HOME) [ -d /etc/ssh/users ] && grep -q "/etc/ssh/users" /etc/ssh/sshd_config 2>/dev/null ;;
         SSH_HARDENING)    grep -q "PermitRootLogin prohibit-password" /etc/ssh/sshd_config 2>/dev/null && systemctl is-enabled fail2ban >/dev/null 2>&1 ;;
         SECURITY)  [ -f /home/defense/cisco-defense-daemon.py ] && systemctl is-enabled cisco-defense >/dev/null 2>&1 && systemctl is-enabled hosting >/dev/null 2>&1 ;;
-        DDNS)      [ -n "$DDNS_FQDN" ] && docker ps --format '{{.Names}}' 2>/dev/null | grep -q "ddns-${DDNS_FQDN}" ;;
+        PODMAN)    command -v podman &>/dev/null ;;
+        DDNS)      [ -n "$DDNS_FQDN" ] && podman ps --format '{{.Names}}' 2>/dev/null | grep -q "ddns-${DDNS_FQDN}" ;;
         *)         return 1 ;;
     esac
 }
@@ -299,10 +646,14 @@ Usage: sudo ./provision_strix_halo.sh [OPTIONS]
 Options:
   --force              Apply changes (default is dry-run)
   --redownload         Re-download assets even if they already exist
+  --cache-dir=PATH     Override download cache directory (default: .cache/)
+  --no-cache           Disable download cache entirely
   --all                Skip menu and install all components
   --only ID,...        Install specific components (comma-separated IDs)
   --ssh-upnp-port=PORT External UPnP port for SSH (enables UPnP forwarding)
   --ddns-fqdn=FQDN    Namecheap DDNS FQDN (enables dynamic DNS)
+  --history            Show provisioning run history
+  --undo[=TIMESTAMP]   Undo a provisioning run (default: latest)
   --help, -h           Show this help message
 
 Component IDs:
@@ -330,15 +681,35 @@ URLEOF
 
 main() {
     [[ $EUID -ne 0 ]] && error "Run as root."
-    check_ssh_safety
-    confirm_execution
 
-    # Load components
+    # Reset CWD to a universally accessible directory. sudo -u <user> inherits
+    # the caller's CWD; if that's an operator-only path (e.g. /home/mk/…), any
+    # process that tries to chdir into it (podman, cmake, git, systemctl --user)
+    # will fail with "Permission denied". INFRA_DIR is already absolute.
+    cd /tmp
+
+    # Load components (needed for --help, --history, and normal runs)
     for component in "${INFRA_DIR}"/components/*.sh; do
         source "$component"
     done
 
     [[ "$*" == *"--help"* || "$*" == *"-h"* ]] && show_help
+
+    # --- History mode ---
+    if [ "$DO_HISTORY" = true ]; then
+        show_history
+        return 0
+    fi
+
+    # --- Undo mode ---
+    if [ "$DO_UNDO" = true ]; then
+        do_undo
+        return 0
+    fi
+
+    # --- Normal provisioning ---
+    check_ssh_safety
+    confirm_execution
 
     if [[ "$*" == *"--all"* ]]; then
         INSTALL_MODES=("${COMPONENT_LIST[@]}")
@@ -363,8 +734,19 @@ main() {
         error "No components selected."
     fi
 
+    # Initialise run state (backups + manifest)
+    init_run_state
+
+    # Write components list to manifest header
+    if [ "$DRY_RUN" = false ] && [ -n "$MANIFEST_FILE" ]; then
+        local comp_list
+        comp_list=$(IFS=,; echo "${INSTALL_MODES[*]}")
+        sed -i "2a # components: ${comp_list}" "$MANIFEST_FILE"
+    fi
+
     # Execute selected components
     for id in "${INSTALL_MODES[@]}"; do
+        CURRENT_COMPONENT="$id"
         log "${BLUE}>>> Executing: ${COMPONENT_NAMES[$id]}${NC}"
         for func in ${COMPONENT_FUNCS[$id]}; do
             $func
@@ -442,4 +824,7 @@ print_urls() {
     echo ""
 }
 
-main "$@"
+# Only run main when executed directly (not sourced)
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi

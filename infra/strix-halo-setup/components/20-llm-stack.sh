@@ -11,17 +11,11 @@ install_openclaw_stack() {
     log "Installing OpenClaw stack..."
     ensure_user claw
 
-    # Docker
-    if ! command -v docker &> /dev/null; then
-        run curl -fsSL https://get.docker.com | sh
-    fi
-    run usermod -aG docker claw
-
     # Node.js 22+ (needed on host for pnpm install / building the clone)
     if ! command -v node &>/dev/null || [[ "$(node -v 2>/dev/null | tr -d v | cut -d. -f1)" -lt 22 ]]; then
         log "Installing Node.js 22..."
         if [ "$DRY_RUN" = false ]; then
-            curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+            cached_curl_pipe "https://deb.nodesource.com/setup_22.x" bash -
             apt install -y nodejs
         else
             run echo "curl … nodesource setup_22.x | bash && apt install nodejs"
@@ -44,7 +38,7 @@ install_openclaw_stack() {
         run sudo -u claw git -C "${OPENCLAW_DIR}" pull --rebase origin "${OPENCLAW_BRANCH}"
     else
         log "Cloning openclaw repo → ${OPENCLAW_DIR}..."
-        run sudo -u claw git clone --branch "${OPENCLAW_BRANCH}" "${OPENCLAW_REPO}" "${OPENCLAW_DIR}"
+        run sudo -u claw bash -c "source '${INFRA_DIR}/lib/cache-helpers.sh' && cached_git_clone '${OPENCLAW_REPO}' '${OPENCLAW_DIR}' '${OPENCLAW_BRANCH}'"
     fi
 
     # Install deps & build on host (volume-mounted into container at runtime)
@@ -55,18 +49,42 @@ install_openclaw_stack() {
         run echo "cd ${OPENCLAW_DIR} && pnpm install && pnpm build"
     fi
 
-    # Config & compose setup
+    # Config setup
     run sudo -u claw mkdir -p /home/claw/.openclaw
-    run cp ${INFRA_DIR}/docker/openclaw-compose.yml /home/claw/openclaw-compose.yml
-    run cp ${INFRA_DIR}/docker/Dockerfile.openclaw  /home/claw/Dockerfile.openclaw
-    run chown claw:claw /home/claw/openclaw-compose.yml /home/claw/Dockerfile.openclaw
 
-    # Env file (consumed by compose --env-file)
+    # Build container image with podman
+    run cp ${INFRA_DIR}/docker/Dockerfile.openclaw /home/claw/Dockerfile.openclaw
+    run chown claw:claw /home/claw/Dockerfile.openclaw
+    track_file_create /home/claw/Dockerfile.openclaw
+    if [ "$DRY_RUN" = false ]; then
+        sudo -u claw podman build -t localhost/openclaw:latest -f /home/claw/Dockerfile.openclaw /home/claw
+    fi
+
+    # Env file
     if [ "$DRY_RUN" = false ]; then
         {
             echo "LOCAL_LLM_URL=${LOCAL_LLM_URL}"
         } | tee /home/claw/.openclaw/env > /dev/null
         chown claw:claw /home/claw/.openclaw/env
+        track_file_create /home/claw/.openclaw/env
+    fi
+
+    # Deploy quadlet (rootless podman via systemd)
+    local quadlet_src="${INFRA_DIR}/quadlet/openclaw.container"
+    if [ -f "$quadlet_src" ]; then
+        if [ "$DRY_RUN" = false ]; then
+            local quadlet_dest="/home/claw/.config/containers/systemd/openclaw.container"
+            mkdir -p "$(dirname "$quadlet_dest")"
+            sed "s|%LOCAL_LLM_URL%|${LOCAL_LLM_URL}|g" "$quadlet_src" > "$quadlet_dest"
+            chown -R claw:claw /home/claw/.config/containers
+            track_file_create "$quadlet_dest"
+        else
+            run echo "deploy quadlet openclaw.container for claw user"
+        fi
+        ensure_linger claw
+        run sudo -u claw systemctl --user daemon-reload
+        run sudo -u claw systemctl --user enable --now openclaw.service
+        track_service "openclaw (user@claw)"
     fi
 
     # Add claw's clone as a git remote in the operator's repo for cherry-picking
@@ -82,10 +100,6 @@ install_openclaw_stack() {
         }
     fi
 
-    # Systemd service
-    run cp ${INFRA_DIR}/systemd/openclaw.service /etc/systemd/system/openclaw.service
-    run systemctl daemon-reload
-    run systemctl enable openclaw
 }
 
 register_component "OPENCLAW" "install_openclaw_stack"

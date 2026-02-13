@@ -1,0 +1,17 @@
+[Unit]
+Description=WordPress Multisite
+After=supabase.service
+
+[Container]
+Image=wordpress:latest
+ContainerName=wordpress_multisite
+Pod=hosting.pod
+Network=hosting-net.network
+PublishPort=8080:80
+Environment=WORDPRESS_DB_HOST=supabase:5432
+Environment=WORDPRESS_DB_USER=postgres
+Environment=WORDPRESS_DB_PASSWORD=%SUPABASE_DB_PASSWORD%
+AutoUpdate=registry
+
+[Install]
+WantedBy=default.target

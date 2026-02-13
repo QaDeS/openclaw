@@ -28,13 +28,17 @@ install_base() {
             noble|jammy) ;;
             *) ubuntu_codename="noble" ;;
         esac
-        wget -qO - https://repo.radeon.com/rocm/rocm.gpg.key | gpg --dearmor | tee /etc/apt/keyrings/rocm.gpg > /dev/null
+        cached_fetch "https://repo.radeon.com/rocm/rocm.gpg.key" /tmp/rocm.gpg.key
+        cat /tmp/rocm.gpg.key | gpg --dearmor | tee /etc/apt/keyrings/rocm.gpg > /dev/null
+        rm -f /tmp/rocm.gpg.key
         echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/rocm/apt/${ROCM_VERSION} ${ubuntu_codename} main" | tee /etc/apt/sources.list.d/rocm.list
+        track_file_create /etc/apt/sources.list.d/rocm.list
         cat <<'PINEOF' > /etc/apt/preferences.d/rocm-pin-700
 Package: *
 Pin: origin repo.radeon.com
 Pin-Priority: 700
 PINEOF
+        track_file_create /etc/apt/preferences.d/rocm-pin-700
     fi
     run apt update
 
@@ -47,7 +51,7 @@ PINEOF
     # Link ROCm binaries into /usr/local/bin so they're always on PATH
     if [ "$DRY_RUN" = false ]; then
         local rocm_dir
-        rocm_dir=$(ls -d /opt/rocm-* 2>/dev/null | sort -V | tail -1)
+        rocm_dir=$(find /opt -maxdepth 1 -name 'rocm-*' -type d 2>/dev/null | sort -V | tail -1)
         if [ -n "$rocm_dir" ] && [ -d "$rocm_dir/bin" ]; then
             ln -sfn "$rocm_dir" /opt/rocm
             for bin in "$rocm_dir"/bin/*; do
@@ -67,7 +71,7 @@ PINEOF
         run apt install -y rocm-hip-sdk rocm-smi-lib mesa-va-drivers mesa-vdpau-drivers
         # Re-link after SDK install (adds hipcc, rocm-smi, etc.)
         if [ "$DRY_RUN" = false ]; then
-            rocm_dir=$(ls -d /opt/rocm-* 2>/dev/null | sort -V | tail -1)
+            rocm_dir=$(find /opt -maxdepth 1 -name 'rocm-*' -type d 2>/dev/null | sort -V | tail -1)
             if [ -n "$rocm_dir" ] && [ -d "$rocm_dir/bin" ]; then
                 ln -sfn "$rocm_dir" /opt/rocm
                 for bin in "$rocm_dir"/bin/*; do
@@ -77,11 +81,14 @@ PINEOF
         fi
     fi
 
+    undo_note "Packages (rocm-hip-sdk, xfce4, kernel) not auto-removed on undo"
+
     log "Optimizing GPU Memory (GTT Size)..."
     if [ "$DRY_RUN" = false ]; then
         local total_mem=$(free -g | awk '/^Mem:/{print $2}')
-        local gtt_size_mb=$((total_mem / 2 * 1024))
+        local gtt_size_mb=$((total_mem * 1024 / 2))
         if ! grep -q "amdgpu.gttsize" /etc/default/grub; then
+            track_file_modify /etc/default/grub
             sed -i "s/GRUB_CMDLINE_LINUX_DEFAULT=\"/GRUB_CMDLINE_LINUX_DEFAULT=\"amdgpu.gttsize=${gtt_size_mb} /" /etc/default/grub
             update-grub
             log "GTT Size set to ${gtt_size_mb}MB. Requires reboot."
@@ -113,11 +120,14 @@ deploy_base_config() {
 
     # Bind xrdp to localhost only — access via SSH tunnel (key-gated)
     if [ "$DRY_RUN" = false ]; then
+        track_file_modify /etc/xrdp/xrdp.ini
         sed -i 's/^port=.*/port=tcp:\/\/127.0.0.1:3389/' /etc/xrdp/xrdp.ini
     fi
     run systemctl enable lightdm
     run systemctl enable xrdp
     run systemctl restart xrdp
+    track_service lightdm
+    track_service xrdp
 }
 
 # Registration

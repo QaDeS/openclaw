@@ -30,6 +30,9 @@ COPY components/ components/
 COPY systemd/     systemd/
 COPY docker/      docker/
 COPY defense/     defense/
+COPY scripts/     scripts/
+COPY lib/         lib/
+COPY quadlet/     quadlet/
 COPY provision_strix_halo.sh .
 
 # --- Layer 4: Test files (changes most often — last for fast rebuilds) ---

@@ -19,7 +19,7 @@ install_ace_step() {
             sudo -u comfyui git -C "${ACE_STEP_HOME}" pull --rebase
         else
             sudo -u comfyui rm -rf "${ACE_STEP_HOME}"
-            sudo -u comfyui git clone "${ACE_STEP_REPO}" "${ACE_STEP_HOME}"
+            sudo -u comfyui bash -c "source '${INFRA_DIR}/lib/cache-helpers.sh' && cached_git_clone '${ACE_STEP_REPO}' '${ACE_STEP_HOME}'"
         fi
     fi
 
@@ -33,9 +33,17 @@ install_ace_step() {
 
         # 3. Install ROCm PyTorch FIRST — this must happen before any other
         #    package can drag in CUDA torch as a transitive dependency
-        sudo -u comfyui "$PIP" install --pre \
-            torch torchvision torchaudio \
-            --index-url "${ACE_STEP_TORCH_INDEX}"
+        local pip_cache_args
+        pip_cache_args=$(cached_pip_index_args torch-rocm-gfx1151)
+        if [ -n "$pip_cache_args" ]; then
+            sudo -u comfyui "$PIP" install --pre \
+                torch torchvision torchaudio \
+                $pip_cache_args
+        else
+            sudo -u comfyui "$PIP" install --pre \
+                torch torchvision torchaudio \
+                --index-url "${ACE_STEP_TORCH_INDEX}"
+        fi
 
         # 4. Install project deps WITHOUT re-resolving torch.
         #    Use requirements-rocm-linux.txt if present (ships with ACE-Step 1.5),
@@ -54,7 +62,8 @@ install_ace_step() {
                 "vector-quantize-pytorch>=1.27.15" \
                 "numba>=0.63.1" \
                 "einops>=0.8.1" \
-                "scipy>=1.10.1"
+                "scipy>=1.10.1" \
+                "loguru>=0.7.3"
         fi
 
         # 5. Install nano-vllm (bundled local package)
@@ -71,11 +80,14 @@ install_ace_step() {
 
         # 8. Symlink shared model directory so downloaded checkpoints are shared
         sudo -u comfyui ln -sfn "${SHARED_MODEL_DIR}" "${ACE_STEP_HOME}/checkpoints"
+        track_symlink "${ACE_STEP_HOME}/checkpoints" "${SHARED_MODEL_DIR}"
     fi
 
     run cp ${INFRA_DIR}/systemd/ace-step.service /etc/systemd/system/ace-step.service
+    track_file_create /etc/systemd/system/ace-step.service
     run systemctl daemon-reload
     run systemctl enable ace-step
+    track_service ace-step
 }
 
 _verify_rocm_torch() {

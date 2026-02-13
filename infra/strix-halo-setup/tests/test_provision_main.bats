@@ -173,8 +173,8 @@ teardown() {
     done
 }
 
-@test "exactly 12 component scripts exist" {
+@test "exactly 13 component scripts exist" {
     local count
     count=$(ls "$STRIX_DIR"/components/*.sh 2>/dev/null | wc -l)
-    [ "$count" -eq 12 ]
+    [ "$count" -eq 13 ]
 }

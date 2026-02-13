@@ -1,0 +1,17 @@
+[Unit]
+Description=OpenClaw Daemon
+
+[Container]
+Image=localhost/openclaw:latest
+ContainerName=openclaw_daemon
+Network=host
+Volume=/home/claw/openclaw:/app
+Volume=/home/claw/.openclaw:/root/.openclaw
+Environment=NODE_ENV=production
+Environment=LOCAL_LLM_URL=%LOCAL_LLM_URL%
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

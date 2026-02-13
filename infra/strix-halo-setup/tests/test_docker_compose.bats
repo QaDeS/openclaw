@@ -1,132 +1,89 @@
 #!/usr/bin/env bats
-# Tests for Docker Compose configuration files.
+# Tests for container configuration files (Quadlet + Dockerfile).
 
 load helpers/test_helper
 
 DOCKER_DIR="$STRIX_DIR/docker"
+QUADLET_DIR="$STRIX_DIR/quadlet"
 
-# --- File existence ---
-
-@test "docker: openclaw-compose.yml exists" {
-    [ -f "$DOCKER_DIR/openclaw-compose.yml" ]
-}
-
-@test "docker: hosting-compose.yml exists" {
-    [ -f "$DOCKER_DIR/hosting-compose.yml" ]
-}
-
-# --- YAML validation ---
-
-@test "docker: openclaw-compose.yml is valid YAML" {
-    python3 -c "
-import yaml, sys
-with open('$DOCKER_DIR/openclaw-compose.yml') as f:
-    yaml.safe_load(f)
-print('valid')
-"
-}
-
-@test "docker: hosting-compose.yml is valid YAML" {
-    python3 -c "
-import yaml, sys
-with open('$DOCKER_DIR/hosting-compose.yml') as f:
-    yaml.safe_load(f)
-print('valid')
-"
-}
-
-# --- openclaw-compose.yml ---
-
-@test "docker: openclaw-compose has version key" {
-    grep -q '^version:' "$DOCKER_DIR/openclaw-compose.yml"
-}
-
-@test "docker: openclaw-compose defines openclaw service" {
-    grep -q 'openclaw:' "$DOCKER_DIR/openclaw-compose.yml"
-}
-
-@test "docker: openclaw-compose uses host network mode" {
-    grep -q 'network_mode: host' "$DOCKER_DIR/openclaw-compose.yml"
-}
-
-@test "docker: openclaw-compose sets NODE_ENV=production" {
-    grep -q 'NODE_ENV=production' "$DOCKER_DIR/openclaw-compose.yml"
-}
-
-@test "docker: openclaw-compose references LOCAL_LLM_URL" {
-    grep -q 'LOCAL_LLM_URL' "$DOCKER_DIR/openclaw-compose.yml"
-}
-
-@test "docker: openclaw-compose mounts /home/claw/openclaw to /app" {
-    grep -q '/home/claw/openclaw:/app' "$DOCKER_DIR/openclaw-compose.yml"
-}
-
-@test "docker: openclaw-compose persists .openclaw config" {
-    grep -q '\.openclaw' "$DOCKER_DIR/openclaw-compose.yml"
-}
-
-@test "docker: openclaw-compose references a Dockerfile" {
-    grep -q 'dockerfile:' "$DOCKER_DIR/openclaw-compose.yml"
-}
+# --- Dockerfile ---
 
 @test "docker: Dockerfile.openclaw exists" {
     [ -f "$DOCKER_DIR/Dockerfile.openclaw" ]
 }
 
-@test "docker: openclaw-compose references Dockerfile.openclaw" {
-    grep -q 'Dockerfile.openclaw' "$DOCKER_DIR/openclaw-compose.yml"
+# --- Legacy compose files kept for reference ---
+
+@test "docker: hosting-compose.yml exists" {
+    [ -f "$DOCKER_DIR/hosting-compose.yml" ]
 }
 
-@test "docker: openclaw-compose sets restart policy" {
-    grep -q 'restart:' "$DOCKER_DIR/openclaw-compose.yml"
+@test "docker: openclaw-compose.yml exists" {
+    [ -f "$DOCKER_DIR/openclaw-compose.yml" ]
 }
 
-# --- hosting-compose.yml ---
+# --- Quadlet files (primary container config) ---
 
-@test "docker: hosting-compose has version key" {
-    grep -q '^version:' "$DOCKER_DIR/hosting-compose.yml"
+@test "quadlet: all hosting quadlet files exist" {
+    [ -f "$QUADLET_DIR/hosting.pod" ]
+    [ -f "$QUADLET_DIR/hosting-net.network" ]
+    [ -f "$QUADLET_DIR/supabase-data.volume" ]
+    [ -f "$QUADLET_DIR/supabase.container" ]
+    [ -f "$QUADLET_DIR/wordpress.container" ]
 }
 
-@test "docker: hosting-compose defines supabase service" {
-    grep -q 'supabase:' "$DOCKER_DIR/hosting-compose.yml"
+@test "quadlet: openclaw.container exists" {
+    [ -f "$QUADLET_DIR/openclaw.container" ]
 }
 
-@test "docker: hosting-compose defines wordpress service" {
-    grep -q 'wordpress:' "$DOCKER_DIR/hosting-compose.yml"
+@test "quadlet: ddns.container.tmpl exists" {
+    [ -f "$QUADLET_DIR/ddns.container.tmpl" ]
 }
 
-@test "docker: hosting-compose uses supabase/postgres image" {
-    grep -q 'supabase/postgres' "$DOCKER_DIR/hosting-compose.yml"
+@test "quadlet: supabase uses supabase/postgres image" {
+    grep -q 'Image=supabase/postgres' "$QUADLET_DIR/supabase.container"
 }
 
-@test "docker: hosting-compose uses wordpress image" {
-    grep -q 'image: wordpress' "$DOCKER_DIR/hosting-compose.yml"
+@test "quadlet: wordpress uses wordpress image" {
+    grep -q 'Image=wordpress:latest' "$QUADLET_DIR/wordpress.container"
 }
 
-@test "docker: hosting-compose wordpress depends_on supabase" {
-    grep -q 'depends_on' "$DOCKER_DIR/hosting-compose.yml"
+@test "quadlet: wordpress exposes port 8080" {
+    grep -q 'PublishPort=8080:80' "$QUADLET_DIR/wordpress.container"
 }
 
-@test "docker: hosting-compose exposes port 8080" {
-    grep -q '8080:80' "$DOCKER_DIR/hosting-compose.yml"
+@test "quadlet: supabase has SUPABASE_DB_PASSWORD placeholder" {
+    grep -q 'SUPABASE_DB_PASSWORD' "$QUADLET_DIR/supabase.container"
 }
 
-@test "docker: hosting-compose uses SUPABASE_DB_PASSWORD variable" {
-    grep -q 'SUPABASE_DB_PASSWORD' "$DOCKER_DIR/hosting-compose.yml"
+@test "quadlet: openclaw uses host network" {
+    grep -q 'Network=host' "$QUADLET_DIR/openclaw.container"
 }
 
-@test "docker: hosting-compose configures WordPress multisite" {
-    grep -q "MULTISITE.*true" "$DOCKER_DIR/hosting-compose.yml"
+@test "quadlet: openclaw sets NODE_ENV=production" {
+    grep -q 'NODE_ENV=production' "$QUADLET_DIR/openclaw.container"
 }
 
-@test "docker: hosting-compose has persistent volume for supabase" {
-    grep -q 'supabase_data' "$DOCKER_DIR/hosting-compose.yml"
+@test "quadlet: openclaw references LOCAL_LLM_URL" {
+    grep -q 'LOCAL_LLM_URL' "$QUADLET_DIR/openclaw.container"
 }
 
-@test "docker: hosting-compose defines hosting_net network" {
-    grep -q 'hosting_net' "$DOCKER_DIR/hosting-compose.yml"
+@test "quadlet: openclaw mounts /home/claw/openclaw to /app" {
+    grep -q '/home/claw/openclaw:/app' "$QUADLET_DIR/openclaw.container"
 }
 
-@test "docker: hosting-compose uses bridge network driver" {
-    grep -q 'driver: bridge' "$DOCKER_DIR/hosting-compose.yml"
+@test "quadlet: openclaw persists .openclaw config" {
+    grep -q '\.openclaw' "$QUADLET_DIR/openclaw.container"
+}
+
+@test "quadlet: ddns template uses namecheap-ddns image" {
+    grep -q 'linuxshots/namecheap-ddns' "$QUADLET_DIR/ddns.container.tmpl"
+}
+
+@test "quadlet: hosting-net uses bridge driver" {
+    grep -q 'Driver=bridge' "$QUADLET_DIR/hosting-net.network"
+}
+
+@test "quadlet: supabase-data volume defined" {
+    grep -q 'VolumeName=supabase-data' "$QUADLET_DIR/supabase-data.volume"
 }

@@ -42,12 +42,12 @@ teardown() {
     [[ "$_output" == *"skipping"* ]]
 }
 
-@test "ddns: install_ddns mentions docker when DDNS_FQDN is set" {
+@test "ddns: install_ddns mentions quadlet when DDNS_FQDN is set" {
     DRY_RUN=true
     DDNS_FQDN="host.example.com"
     capture install_ddns
     [ "$_status" -eq 0 ]
-    [[ "$_output" == *"docker"* ]] || [[ "$_output" == *"Dynamic DNS"* ]]
+    [[ "$_output" == *"quadlet"* ]] || [[ "$_output" == *"Dynamic DNS"* ]]
 }
 
 # --- Content checks ---
@@ -56,10 +56,22 @@ teardown() {
     grep -q "/home/ddns" "$STRIX_DIR/components/62-ddns.sh"
 }
 
-@test "ddns: component uses namecheap-ddns docker image" {
+@test "ddns: component uses namecheap-ddns image" {
     grep -q "namecheap-ddns" "$STRIX_DIR/components/62-ddns.sh"
 }
 
 @test "ddns: component creates secrets directory with mode 700" {
     grep -q "chmod 700" "$STRIX_DIR/components/62-ddns.sh"
+}
+
+@test "ddns: component uses Podman Quadlet" {
+    grep -q "quadlet" "$STRIX_DIR/components/62-ddns.sh"
+}
+
+@test "ddns: component uses ensure_linger" {
+    grep -q "ensure_linger" "$STRIX_DIR/components/62-ddns.sh"
+}
+
+@test "ddns: component uses track_podman" {
+    grep -q "track_podman" "$STRIX_DIR/components/62-ddns.sh"
 }

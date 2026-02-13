@@ -1,0 +1,5 @@
+[Pod]
+PodName=hosting
+
+[Install]
+WantedBy=default.target

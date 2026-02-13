@@ -37,18 +37,6 @@ teardown() {
     [[ "$_output" == *"OpenClaw"* ]]
 }
 
-@test "openclaw: would enable openclaw service in dry-run" {
-    DRY_RUN=true
-    capture install_openclaw_stack
-    [[ "$_output" == *"systemctl"*"enable"*"openclaw"* ]]
-}
-
-@test "openclaw: would add claw user to docker group" {
-    DRY_RUN=true
-    capture install_openclaw_stack
-    [[ "$_output" == *"usermod"*"docker"*"claw"* ]]
-}
-
 # --- Script content checks ---
 
 @test "openclaw: component_name header is OpenClaw Stack" {
@@ -59,14 +47,26 @@ teardown() {
     grep -q 'PROJECT_ROOT' "$STRIX_DIR/components/20-llm-stack.sh"
 }
 
-@test "openclaw: writes docker.env with LOCAL_LLM_URL" {
+@test "openclaw: writes env with LOCAL_LLM_URL" {
     grep -q "LOCAL_LLM_URL" "$STRIX_DIR/components/20-llm-stack.sh"
 }
 
-@test "openclaw: copies openclaw-compose.yml" {
-    grep -q "openclaw-compose.yml" "$STRIX_DIR/components/20-llm-stack.sh"
+@test "openclaw: uses podman build for container image" {
+    grep -q "podman build" "$STRIX_DIR/components/20-llm-stack.sh"
 }
 
-@test "openclaw: checks for docker before installing" {
-    grep -q 'command -v docker' "$STRIX_DIR/components/20-llm-stack.sh"
+@test "openclaw: deploys quadlet file" {
+    grep -q "quadlet" "$STRIX_DIR/components/20-llm-stack.sh"
+}
+
+@test "openclaw: uses ensure_linger" {
+    grep -q "ensure_linger" "$STRIX_DIR/components/20-llm-stack.sh"
+}
+
+@test "openclaw: uses cached_curl_pipe for nodesource" {
+    grep -q "cached_curl_pipe" "$STRIX_DIR/components/20-llm-stack.sh"
+}
+
+@test "openclaw: uses cached_git_clone for repo" {
+    grep -q "cached_git_clone" "$STRIX_DIR/components/20-llm-stack.sh"
 }

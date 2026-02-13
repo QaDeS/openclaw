@@ -109,14 +109,14 @@ teardown() {
 
 # --- End-to-end simulation of the fixed flow ---
 
-@test "FIXED-FLOW: correct loading sources all 12 components" {
+@test "FIXED-FLOW: correct loading sources all 13 components" {
     local loaded=0
     for component in "${STRIX_DIR}"/components/*.sh; do
         source "$component"
         loaded=$((loaded + 1))
     done
-    [ "$loaded" -eq 12 ]
-    [ ${#COMPONENT_LIST[@]} -eq 12 ]
+    [ "$loaded" -eq 13 ]
+    [ ${#COMPONENT_LIST[@]} -eq 13 ]
 }
 
 @test "FIXED-FLOW: with --all, INSTALL_MODES matches COMPONENT_LIST" {
@@ -124,7 +124,7 @@ teardown() {
         source "$component"
     done
     INSTALL_MODES=("${COMPONENT_LIST[@]}")
-    [ ${#INSTALL_MODES[@]} -eq 12 ]
+    [ ${#INSTALL_MODES[@]} -eq 13 ]
 }
 
 @test "FIXED-FLOW: all component functions execute in dry-run" {
@@ -145,8 +145,8 @@ teardown() {
             executed=$((executed + 1))
         done
     done
-    # SSH_OUTSIDE_HOME(3) + SSH_HARDENING(4) + BASE(3) + OPENCLAW(1) + LMSTUDIO(1) + LLAMACPP(1) + SYNC_LLAMA(1) + COMFYUI(2) + ZIMAGE(1) + ACE_STEP(1) + SECURITY(2) + DDNS(1) = 21
-    [ "$executed" -eq 21 ]
+    # SSH_OUTSIDE_HOME(3) + SSH_HARDENING(4) + BASE(3) + PODMAN(1) + OPENCLAW(1) + LMSTUDIO(1) + LLAMACPP(1) + SYNC_LLAMA(1) + COMFYUI(2) + ZIMAGE(1) + ACE_STEP(1) + SECURITY(2) + DDNS(1) = 22
+    [ "$executed" -eq 22 ]
 }
 
 # --- Regression: set -e vs menu selection ---

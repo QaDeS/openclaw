@@ -72,20 +72,10 @@ teardown() {
     [[ "$_output" == *"Hosting Stack"* ]] || [[ "$_output" == *"hosting"* ]]
 }
 
-@test "security: install_hosting_stack would enable hosting service" {
+@test "security: install_hosting_stack mentions Podman Quadlet" {
     DRY_RUN=true
     capture install_hosting_stack
-    [[ "$_output" == *"systemctl"*"enable"*"hosting"* ]]
-}
-
-@test "security: install_hosting_stack would add hosting user to docker group" {
-    DRY_RUN=true
-    capture install_hosting_stack
-    [[ "$_output" == *"usermod"*"docker"*"hosting"* ]]
-}
-
-@test "security: install_hosting_stack checks for docker" {
-    grep -q 'command -v docker' "$STRIX_DIR/components/60-security.sh"
+    [[ "$_output" == *"Podman Quadlet"* ]] || [[ "$_output" == *"quadlet"* ]]
 }
 
 # --- Script content checks ---
@@ -99,11 +89,17 @@ teardown() {
 }
 
 @test "security: installs security scanners via uv tool" {
-    grep -q "uv tool install" "$STRIX_DIR/components/60-security.sh"
+    grep -q "uv.*tool install" "$STRIX_DIR/components/60-security.sh"
 }
 
-@test "security: installs a2a-scanner, mcp-scanner, skill-scanner" {
-    grep -q "a2a-scanner" "$STRIX_DIR/components/60-security.sh"
-    grep -q "mcp-scanner" "$STRIX_DIR/components/60-security.sh"
-    grep -q "skill-scanner" "$STRIX_DIR/components/60-security.sh"
+@test "security: installs mcp-scan scanner" {
+    grep -q "mcp-scan" "$STRIX_DIR/components/60-security.sh"
+}
+
+@test "security: uses quadlet files for hosting" {
+    grep -q "quadlet" "$STRIX_DIR/components/60-security.sh"
+}
+
+@test "security: uses ensure_linger for hosting user" {
+    grep -q "ensure_linger" "$STRIX_DIR/components/60-security.sh"
 }

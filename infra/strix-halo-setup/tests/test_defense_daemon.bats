@@ -33,16 +33,8 @@ except py_compile.PyCompileError as e:
     grep -q "^SCANNERS" "$DAEMON"
 }
 
-@test "defense: SCANNERS includes a2a-scanner" {
-    grep -q "a2a-scanner" "$DAEMON"
-}
-
-@test "defense: SCANNERS includes mcp-scanner" {
-    grep -q "mcp-scanner" "$DAEMON"
-}
-
-@test "defense: SCANNERS includes skill-scanner" {
-    grep -q "skill-scanner" "$DAEMON"
+@test "defense: SCANNERS includes mcp-scan" {
+    grep -q "mcp-scan" "$DAEMON"
 }
 
 @test "defense: SCANNERS includes audit-project-mutation" {

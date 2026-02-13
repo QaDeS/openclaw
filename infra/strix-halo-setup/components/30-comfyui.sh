@@ -18,20 +18,29 @@ install_comfyui() {
             sudo -u comfyui git -C "$repo_dir" pull --rebase
         else
             sudo -u comfyui rm -rf "$repo_dir"
-            sudo -u comfyui git clone https://github.com/comfyanonymous/ComfyUI.git "$repo_dir"
+            sudo -u comfyui bash -c "source '${INFRA_DIR}/lib/cache-helpers.sh' && cached_git_clone 'https://github.com/comfyanonymous/ComfyUI.git' '$repo_dir'"
         fi
     fi
 
     if [ "$DRY_RUN" = false ]; then
         # Install uv
-        sudo -u comfyui bash -c "curl -LsSf https://astral.sh/uv/install.sh | sh"
+        sudo -u comfyui bash -c "source '${INFRA_DIR}/lib/cache-helpers.sh' && cached_curl_pipe 'https://astral.sh/uv/install.sh' sh"
         # Create venv
         sudo -u comfyui "$UV" --no-config venv "$venv_dir"
         # Install ROCm specific PyTorch for GFX1151
-        sudo -u comfyui "$UV" --no-config pip install \
-            --python "${venv_dir}/bin/python" \
-            --pre torch torchvision torchaudio \
-            --index-url https://rocm.nightlies.amd.com/v2/gfx1151/
+        local pip_cache_args
+        pip_cache_args=$(cached_pip_index_args torch-rocm-gfx1151)
+        if [ -n "$pip_cache_args" ]; then
+            sudo -u comfyui "$UV" --no-config pip install \
+                --python "${venv_dir}/bin/python" \
+                --pre torch torchvision torchaudio \
+                $pip_cache_args
+        else
+            sudo -u comfyui "$UV" --no-config pip install \
+                --python "${venv_dir}/bin/python" \
+                --pre torch torchvision torchaudio \
+                --index-url https://rocm.nightlies.amd.com/v2/gfx1151/
+        fi
         sudo -u comfyui "$UV" --no-config pip install \
             --python "${venv_dir}/bin/python" \
             -r "${repo_dir}/requirements.txt"
@@ -42,11 +51,14 @@ install_comfyui() {
 ${SUDO_USER} ALL=(comfyui) NOPASSWD: /usr/bin/rsync
 EOF
         run chmod 0440 /etc/sudoers.d/comfyui-upload
+        track_file_create /etc/sudoers.d/comfyui-upload
     fi
 
     run cp ${INFRA_DIR}/systemd/comfyui.service /etc/systemd/system/comfyui.service
+    track_file_create /etc/systemd/system/comfyui.service
     run systemctl daemon-reload
     run systemctl enable comfyui
+    track_service comfyui
 }
 
 install_comfyui_manager() {
@@ -62,7 +74,7 @@ install_comfyui_manager() {
             sudo -u comfyui git -C "$manager_dir" pull --rebase
         else
             sudo -u comfyui rm -rf "$manager_dir"
-            sudo -u comfyui git clone https://github.com/ltdrdata/ComfyUI-Manager.git "$manager_dir"
+            sudo -u comfyui bash -c "source '${INFRA_DIR}/lib/cache-helpers.sh' && cached_git_clone 'https://github.com/ltdrdata/ComfyUI-Manager.git' '$manager_dir'"
         fi
 
         # Install Manager dependencies

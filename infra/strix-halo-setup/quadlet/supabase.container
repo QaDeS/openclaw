@@ -1,0 +1,15 @@
+[Unit]
+Description=Supabase PostgreSQL
+After=hosting-net.service supabase-data.service
+
+[Container]
+Image=supabase/postgres:latest
+ContainerName=supabase_db
+Pod=hosting.pod
+Network=hosting-net.network
+Volume=supabase-data.volume:/var/lib/postgresql/data
+Environment=POSTGRES_PASSWORD=%SUPABASE_DB_PASSWORD%
+AutoUpdate=registry
+
+[Install]
+WantedBy=default.target

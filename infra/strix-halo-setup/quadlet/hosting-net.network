@@ -1,0 +1,6 @@
+[Network]
+NetworkName=hosting-net
+Driver=bridge
+
+[Install]
+WantedBy=default.target
