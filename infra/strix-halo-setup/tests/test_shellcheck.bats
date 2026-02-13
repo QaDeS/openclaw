@@ -5,6 +5,12 @@ load helpers/test_helper
 
 STRIX="$STRIX_DIR"
 
+setup() {
+    if ! command -v shellcheck &>/dev/null; then
+        skip "shellcheck not installed"
+    fi
+}
+
 @test "shellcheck: provision_strix_halo.sh passes" {
     # SC1090: can't follow non-constant source (expected for plugin framework)
     # SC2162: read without -r (cosmetic; backslash mangling irrelevant for confirmation prompts)
