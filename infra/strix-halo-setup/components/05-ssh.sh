@@ -62,6 +62,22 @@ install_ssh_user_hook() {
 deploy_ecryptfs_helpers() {
     log "Deploying ecryptfs login/logout helpers..."
 
+    # Patch /etc/pam.d/sshd to skip pam_ecryptfs.so so SSH pubkey login
+    # doesn't fail trying to mount ecryptfs without a password.
+    # The profile.d hook below handles mounting once the shell is ready.
+    local pam_sshd="/etc/pam.d/sshd"
+    local marker="# strix-skip-ecryptfs"
+    if [ -f "$pam_sshd" ] && ! grep -q "$marker" "$pam_sshd" 2>/dev/null; then
+        if [ "$DRY_RUN" = false ]; then
+            backup_file "$pam_sshd"
+            # Comment out any pam_ecryptfs.so lines and tag with our marker
+            sed -i "s/^\(.*pam_ecryptfs\.so.*\)$/$marker\n# \\1/" "$pam_sshd"
+            log "Disabled pam_ecryptfs in $pam_sshd"
+        else
+            log "${YELLOW}[DRY-RUN] Will disable pam_ecryptfs in ${pam_sshd}${NC}"
+        fi
+    fi
+
     # Auto-mount encrypted home on login
     if [ "$DRY_RUN" = false ]; then
         cat <<'PROFILE' | tee /etc/profile.d/ecryptfs-mount.sh >/dev/null

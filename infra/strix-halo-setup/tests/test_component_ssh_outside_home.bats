@@ -46,6 +46,22 @@ teardown() {
     [ "$_status" -eq 0 ]
 }
 
+@test "ssh-outside-home: deploy_ecryptfs_helpers patches pam_ecryptfs out of sshd" {
+    grep -q 'pam_ecryptfs' "$STRIX_DIR/components/05-ssh.sh"
+    grep -q '/etc/pam.d/sshd' "$STRIX_DIR/components/05-ssh.sh"
+}
+
+@test "ssh-outside-home: deploy_ecryptfs_helpers skips PAM patch in dry-run" {
+    grep -q 'DRY-RUN.*Will disable pam_ecryptfs' "$STRIX_DIR/components/05-ssh.sh"
+}
+
+@test "ssh-outside-home: deploy_ecryptfs_helpers PAM patch is idempotent" {
+    # Marker guard prevents re-patching
+    grep -q 'strix-skip-ecryptfs' "$STRIX_DIR/components/05-ssh.sh"
+    grep -q 'grep -q.*marker.*pam_sshd' "$STRIX_DIR/components/05-ssh.sh" ||
+        grep -q '! grep -q "$marker"' "$STRIX_DIR/components/05-ssh.sh"
+}
+
 # --- Content checks ---
 
 @test "ssh-outside-home: component deploys setup-ssh-for-user script" {
