@@ -484,6 +484,18 @@ ensure_linger() {
     if ! systemctl is-active --quiet "user@${uid}.service"; then
         systemctl start "user@${uid}.service"
     fi
+
+    # Wait for the D-Bus session socket — the user manager startup is
+    # async and the bus may not exist yet when we return.
+    local rtdir="/run/user/${uid}"
+    local tries=0
+    while [ ! -S "${rtdir}/bus" ] && [ "$tries" -lt 30 ]; do
+        sleep 0.2
+        tries=$((tries + 1))
+    done
+    if [ ! -S "${rtdir}/bus" ]; then
+        warn "D-Bus session socket not found after 6s for ${user} (uid ${uid})"
+    fi
 }
 
 # Run systemctl --user as another user with the correct XDG_RUNTIME_DIR.

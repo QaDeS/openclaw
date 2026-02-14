@@ -25,46 +25,60 @@ install_ace_step() {
     fi
 
     if [ "$DRY_RUN" = false ]; then
-        # 2. Create an isolated Python 3.11 venv via uv.
-        #    ACE-Step requires python ==3.11.*; uv auto-downloads the interpreter.
         local UV="/home/comfyui/.local/bin/uv"
-        sudo -u comfyui "$UV" --no-config venv --seed --python 3.11 "${ACE_STEP_VENV}"
         local PIP="${ACE_STEP_VENV}/bin/pip"
         local PYTHON="${ACE_STEP_VENV}/bin/python"
 
-        # 3. Install ROCm PyTorch FIRST — this must happen before any other
-        #    package can drag in CUDA torch as a transitive dependency
-        local pip_cache_args
-        pip_cache_args=$(cached_pip_index_args torch-rocm-gfx1151)
-        if [ -n "$pip_cache_args" ]; then
-            sudo -u comfyui "$PIP" install --pre \
-                torch torchvision torchaudio \
-                $pip_cache_args
-        else
-            sudo -u comfyui "$PIP" install --pre \
-                torch torchvision torchaudio \
-                --index-url "${ACE_STEP_TORCH_INDEX}"
+        # Check if venv already has ROCm torch installed
+        local need_venv=true
+        if [ -f "$PYTHON" ]; then
+            local hip
+            hip=$("$PYTHON" -c "import torch; print(torch.version.hip or '')" 2>/dev/null || true)
+            if [ -n "$hip" ]; then
+                log "ACE-Step venv already has ROCm torch (HIP ${hip}), skipping reinstall."
+                need_venv=false
+            fi
         fi
 
-        # 4. Install project deps WITHOUT re-resolving torch.
-        #    Use requirements-rocm-linux.txt if present (ships with ACE-Step 1.5),
-        #    otherwise fall back to the standard requirements minus torch.
-        if [ -f "${ACE_STEP_HOME}/requirements-rocm-linux.txt" ]; then
-            sudo -u comfyui "$PIP" install -r "${ACE_STEP_HOME}/requirements-rocm-linux.txt"
-        else
-            log "No requirements-rocm-linux.txt found, installing core deps manually..."
-            sudo -u comfyui "$PIP" install \
-                "transformers>=4.51.0,<4.58.0" \
-                "diffusers" \
-                "accelerate>=1.12.0" \
-                "gradio==6.2.0" \
-                "fastapi>=0.110.0" \
-                "uvicorn[standard]>=0.27.0" \
-                "vector-quantize-pytorch>=1.27.15" \
-                "numba>=0.63.1" \
-                "einops>=0.8.1" \
-                "scipy>=1.10.1" \
-                "loguru>=0.7.3"
+        if [ "$need_venv" = true ] || [ "$REDOWNLOAD" = true ]; then
+            # 2. Create an isolated Python 3.11 venv via uv.
+            #    ACE-Step requires python ==3.11.*; uv auto-downloads the interpreter.
+            sudo -u comfyui "$UV" --no-config venv --clear --seed --python 3.11 "${ACE_STEP_VENV}"
+
+            # 3. Install ROCm PyTorch FIRST — this must happen before any other
+            #    package can drag in CUDA torch as a transitive dependency
+            local pip_cache_args
+            pip_cache_args=$(cached_pip_index_args torch-rocm-gfx1151)
+            if [ -n "$pip_cache_args" ]; then
+                sudo -u comfyui "$PIP" install --pre \
+                    torch torchvision torchaudio \
+                    $pip_cache_args
+            else
+                sudo -u comfyui "$PIP" install --pre \
+                    torch torchvision torchaudio \
+                    --index-url "${ACE_STEP_TORCH_INDEX}"
+            fi
+
+            # 4. Install project deps WITHOUT re-resolving torch.
+            #    Use requirements-rocm-linux.txt if present (ships with ACE-Step 1.5),
+            #    otherwise fall back to the standard requirements minus torch.
+            if [ -f "${ACE_STEP_HOME}/requirements-rocm-linux.txt" ]; then
+                sudo -u comfyui "$PIP" install -r "${ACE_STEP_HOME}/requirements-rocm-linux.txt"
+            else
+                log "No requirements-rocm-linux.txt found, installing core deps manually..."
+                sudo -u comfyui "$PIP" install \
+                    "transformers>=4.51.0,<4.58.0" \
+                    "diffusers" \
+                    "accelerate>=1.12.0" \
+                    "gradio==6.2.0" \
+                    "fastapi>=0.110.0" \
+                    "uvicorn[standard]>=0.27.0" \
+                    "vector-quantize-pytorch>=1.27.15" \
+                    "numba>=0.63.1" \
+                    "einops>=0.8.1" \
+                    "scipy>=1.10.1" \
+                    "loguru>=0.7.3"
+            fi
         fi
 
         # 5. Install nano-vllm (bundled local package) with --no-deps:

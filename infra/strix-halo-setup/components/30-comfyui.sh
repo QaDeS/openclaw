@@ -25,26 +25,42 @@ install_comfyui() {
 
     if [ "$DRY_RUN" = false ]; then
         # Install uv
-        sudo -u comfyui bash -c "source '${CACHE_HELPERS}' && cached_curl_pipe 'https://astral.sh/uv/install.sh' sh"
-        # Create venv
-        sudo -u comfyui "$UV" --no-config venv "$venv_dir"
-        # Install ROCm specific PyTorch for GFX1151
-        local pip_cache_args
-        pip_cache_args=$(cached_pip_index_args torch-rocm-gfx1151)
-        if [ -n "$pip_cache_args" ]; then
-            sudo -u comfyui "$UV" --no-config pip install \
-                --python "${venv_dir}/bin/python" \
-                --pre torch torchvision torchaudio \
-                $pip_cache_args
-        else
-            sudo -u comfyui "$UV" --no-config pip install \
-                --python "${venv_dir}/bin/python" \
-                --pre torch torchvision torchaudio \
-                --index-url https://rocm.nightlies.amd.com/v2/gfx1151/
+        if [ ! -f "$UV" ]; then
+            sudo -u comfyui bash -c "source '${CACHE_HELPERS}' && cached_curl_pipe 'https://astral.sh/uv/install.sh' sh"
         fi
-        sudo -u comfyui "$UV" --no-config pip install \
-            --python "${venv_dir}/bin/python" \
-            -r "${repo_dir}/requirements.txt"
+
+        # Check if venv already has ROCm torch installed
+        local need_venv=true
+        if [ -f "${venv_dir}/bin/python" ]; then
+            local hip
+            hip=$("${venv_dir}/bin/python" -c "import torch; print(torch.version.hip or '')" 2>/dev/null || true)
+            if [ -n "$hip" ]; then
+                log "Venv already has ROCm torch (HIP ${hip}), skipping reinstall."
+                need_venv=false
+            fi
+        fi
+
+        if [ "$need_venv" = true ] || [ "$REDOWNLOAD" = true ]; then
+            # Create/recreate venv
+            sudo -u comfyui "$UV" --no-config venv --clear "$venv_dir"
+            # Install ROCm specific PyTorch for GFX1151
+            local pip_cache_args
+            pip_cache_args=$(cached_pip_index_args torch-rocm-gfx1151)
+            if [ -n "$pip_cache_args" ]; then
+                sudo -u comfyui "$UV" --no-config pip install \
+                    --python "${venv_dir}/bin/python" \
+                    --pre torch torchvision torchaudio \
+                    $pip_cache_args
+            else
+                sudo -u comfyui "$UV" --no-config pip install \
+                    --python "${venv_dir}/bin/python" \
+                    --pre torch torchvision torchaudio \
+                    --index-url https://rocm.nightlies.amd.com/v2/gfx1151/
+            fi
+            sudo -u comfyui "$UV" --no-config pip install \
+                --python "${venv_dir}/bin/python" \
+                -r "${repo_dir}/requirements.txt"
+        fi
     fi
     # Allow the provisioning user to rsync files as comfyui (model uploads)
     if [ -n "$SUDO_USER" ]; then
