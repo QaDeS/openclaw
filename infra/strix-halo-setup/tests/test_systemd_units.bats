@@ -7,10 +7,6 @@ SYSTEMD_DIR="$STRIX_DIR/systemd"
 
 # --- File existence ---
 
-@test "systemd: llmster.service exists" {
-    [ -f "$SYSTEMD_DIR/llmster.service" ]
-}
-
 @test "systemd: comfyui.service exists" {
     [ -f "$SYSTEMD_DIR/comfyui.service" ]
 }
@@ -39,10 +35,10 @@ SYSTEMD_DIR="$STRIX_DIR/systemd"
     [ -f "$SYSTEMD_DIR/sync-llama-models.service" ]
 }
 
-@test "systemd: exactly 9 service units exist" {
+@test "systemd: exactly 8 service units exist" {
     local count
     count=$(ls "$SYSTEMD_DIR"/*.service 2>/dev/null | wc -l)
-    [ "$count" -eq 9 ]
+    [ "$count" -eq 8 ]
 }
 
 @test "systemd: upnp-ssh.service exists" {
@@ -99,10 +95,6 @@ SYSTEMD_DIR="$STRIX_DIR/systemd"
 
 # --- HSA Override ---
 
-@test "systemd: llmster.service has HSA_OVERRIDE_GFX_VERSION=11.5.1" {
-    grep -q "HSA_OVERRIDE_GFX_VERSION=11.5.1" "$SYSTEMD_DIR/llmster.service"
-}
-
 @test "systemd: comfyui.service has HSA_OVERRIDE_GFX_VERSION=11.5.1" {
     grep -q "HSA_OVERRIDE_GFX_VERSION=11.5.1" "$SYSTEMD_DIR/comfyui.service"
 }
@@ -112,10 +104,6 @@ SYSTEMD_DIR="$STRIX_DIR/systemd"
 }
 
 # --- User assignments ---
-
-@test "systemd: llmster.service runs as lmstudio user" {
-    grep -q "^User=lmstudio" "$SYSTEMD_DIR/llmster.service"
-}
 
 @test "systemd: llamacpp.service runs as llamacpp user" {
     grep -q "^User=llamacpp" "$SYSTEMD_DIR/llamacpp.service"
@@ -156,7 +144,7 @@ SYSTEMD_DIR="$STRIX_DIR/systemd"
 }
 
 @test "systemd: oneshot services have RemainAfterExit=yes" {
-    for f in "$SYSTEMD_DIR/llmster.service" "$SYSTEMD_DIR/openclaw.service" "$SYSTEMD_DIR/hosting.service"; do
+    for f in "$SYSTEMD_DIR/openclaw.service" "$SYSTEMD_DIR/hosting.service"; do
         grep -q "RemainAfterExit=yes" "$f" || { echo "Missing RemainAfterExit in $(basename "$f")"; return 1; }
     done
 }
@@ -179,19 +167,11 @@ SYSTEMD_DIR="$STRIX_DIR/systemd"
     done
 }
 
-@test "systemd: llmster.service is type oneshot (no RestartSec)" {
-    grep -q "^Type=oneshot" "$SYSTEMD_DIR/llmster.service"
-}
-
 @test "systemd: cisco-defense.service has RestartSec=30" {
     grep -q "^RestartSec=30" "$SYSTEMD_DIR/cisco-defense.service"
 }
 
 # --- ExecStart paths ---
-
-@test "systemd: llmster.service starts lms server" {
-    grep -q "ExecStart=.*/lms server start" "$SYSTEMD_DIR/llmster.service"
-}
 
 @test "systemd: comfyui.service starts python main.py with --listen from venv" {
     grep -q "ExecStart=.*/python main.py --listen" "$SYSTEMD_DIR/comfyui.service"
@@ -213,7 +193,7 @@ SYSTEMD_DIR="$STRIX_DIR/systemd"
 # --- PYTORCH_ALLOC_CONF ---
 
 @test "systemd: GPU services have PYTORCH_ALLOC_CONF" {
-    for f in "$SYSTEMD_DIR/llmster.service" "$SYSTEMD_DIR/comfyui.service" "$SYSTEMD_DIR/ace-step.service"; do
+    for f in "$SYSTEMD_DIR/comfyui.service" "$SYSTEMD_DIR/ace-step.service"; do
         grep -q "PYTORCH_ALLOC_CONF=expandable_segments:True" "$f" || {
             echo "Missing PYTORCH_ALLOC_CONF in $(basename "$f")"
             return 1

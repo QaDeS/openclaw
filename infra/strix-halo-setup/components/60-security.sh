@@ -9,7 +9,7 @@ install_cisco_defense() {
     run cp ${INFRA_DIR}/defense/cisco-defense-daemon.py /home/defense/
     run chown defense:defense /home/defense/cisco-defense-daemon.py
     if [ "$DRY_RUN" = false ]; then
-        sudo -u defense bash -c "source '${INFRA_DIR}/lib/cache-helpers.sh' && cached_curl_pipe 'https://astral.sh/uv/install.sh' sh"
+        sudo -u defense bash -c "source '${CACHE_HELPERS}' && cached_curl_pipe 'https://astral.sh/uv/install.sh' sh"
         # Install available scanners as uv tools (a2a-scanner/skill-scanner not yet on PyPI)
         sudo -u defense /home/defense/.local/bin/uv --no-config tool install mcp-scan --python 3.11
     fi
@@ -45,8 +45,8 @@ install_hosting_stack() {
 
         chown -R hosting:hosting /home/hosting/.config
         ensure_linger hosting
-        sudo -u hosting systemctl --user daemon-reload
-        sudo -u hosting systemctl --user enable --now hosting-pod.service
+        user_systemctl hosting daemon-reload
+        user_systemctl hosting start hosting-pod.service
     else
         run echo "deploy quadlet files for hosting stack"
         run echo "enable linger + start hosting-pod.service for hosting user"

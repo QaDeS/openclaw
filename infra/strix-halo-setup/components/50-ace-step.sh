@@ -16,10 +16,11 @@ install_ace_step() {
     if [ "$DRY_RUN" = false ]; then
         if [ -d "${ACE_STEP_HOME}" ] && [ "$REDOWNLOAD" = false ]; then
             log "ACE-Step already cloned, pulling latest..."
+            sudo -u comfyui git -C "${ACE_STEP_HOME}" checkout -- .
             sudo -u comfyui git -C "${ACE_STEP_HOME}" pull --rebase
         else
             sudo -u comfyui rm -rf "${ACE_STEP_HOME}"
-            sudo -u comfyui bash -c "source '${INFRA_DIR}/lib/cache-helpers.sh' && cached_git_clone '${ACE_STEP_REPO}' '${ACE_STEP_HOME}'"
+            sudo -u comfyui bash -c "source '${CACHE_HELPERS}' && cached_git_clone '${ACE_STEP_REPO}' '${ACE_STEP_HOME}'"
         fi
     fi
 
@@ -66,9 +67,12 @@ install_ace_step() {
                 "loguru>=0.7.3"
         fi
 
-        # 5. Install nano-vllm (bundled local package)
+        # 5. Install nano-vllm (bundled local package) with --no-deps:
+        #    its pyproject.toml pins a CUDA flash-attn wheel; on ROCm we skip
+        #    that — torch/triton/transformers are already installed from the
+        #    ROCm nightly index and AMD ships its own flash attention kernels.
         if [ -d "${ACE_STEP_HOME}/acestep/third_parts/nano-vllm" ]; then
-            sudo -u comfyui "$PIP" install -e "${ACE_STEP_HOME}/acestep/third_parts/nano-vllm"
+            sudo -u comfyui "$PIP" install -e "${ACE_STEP_HOME}/acestep/third_parts/nano-vllm" --no-deps
         fi
 
         # 6. Install ACE-Step itself with --no-deps to prevent pip from

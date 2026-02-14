@@ -15,10 +15,11 @@ install_llamacpp() {
     if [ "$DRY_RUN" = false ]; then
         if [ -d "$repo_dir" ] && [ "$REDOWNLOAD" = false ]; then
             log "llama.cpp already cloned, pulling latest..."
+            sudo -u llamacpp git -C "$repo_dir" checkout -- .
             sudo -u llamacpp git -C "$repo_dir" pull --rebase
         else
             sudo -u llamacpp rm -rf "$repo_dir"
-            sudo -u llamacpp bash -c "source '${INFRA_DIR}/lib/cache-helpers.sh' && cached_git_clone 'https://github.com/ggml-org/llama.cpp.git' '$repo_dir'"
+            sudo -u llamacpp bash -c "source '${CACHE_HELPERS}' && cached_git_clone 'https://github.com/ggml-org/llama.cpp.git' '$repo_dir'"
         fi
     fi
 
@@ -31,7 +32,7 @@ install_llamacpp() {
     fi
 
     # Symlink shared models (for direct access)
-    run sudo -u llamacpp ln -sf ${SHARED_MODEL_DIR} /home/llamacpp/models
+    run sudo -u llamacpp ln -sfn ${SHARED_MODEL_DIR} /home/llamacpp/models
     track_symlink /home/llamacpp/models "${SHARED_MODEL_DIR}"
 
     # Install systemd service (uses /llama_models from sync-llama-models component)

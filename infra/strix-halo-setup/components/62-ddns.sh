@@ -66,8 +66,8 @@ install_ddns() {
         track_podman "$container_name" "linuxshots/namecheap-ddns"
 
         ensure_linger ddns
-        sudo -u ddns systemctl --user daemon-reload
-        sudo -u ddns systemctl --user enable --now "${container_name}.service"
+        user_systemctl ddns daemon-reload
+        user_systemctl ddns start "${container_name}.service"
 
         success "DDNS quadlet deployed: ${container_name}"
     else

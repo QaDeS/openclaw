@@ -38,7 +38,7 @@ install_openclaw_stack() {
         run sudo -u claw git -C "${OPENCLAW_DIR}" pull --rebase origin "${OPENCLAW_BRANCH}"
     else
         log "Cloning openclaw repo → ${OPENCLAW_DIR}..."
-        run sudo -u claw bash -c "source '${INFRA_DIR}/lib/cache-helpers.sh' && cached_git_clone '${OPENCLAW_REPO}' '${OPENCLAW_DIR}' '${OPENCLAW_BRANCH}'"
+        run sudo -u claw bash -c "source '${CACHE_HELPERS}' && cached_git_clone '${OPENCLAW_REPO}' '${OPENCLAW_DIR}' '${OPENCLAW_BRANCH}'"
     fi
 
     # Install deps & build on host (volume-mounted into container at runtime)
@@ -82,8 +82,8 @@ install_openclaw_stack() {
             run echo "deploy quadlet openclaw.container for claw user"
         fi
         ensure_linger claw
-        run sudo -u claw systemctl --user daemon-reload
-        run sudo -u claw systemctl --user enable --now openclaw.service
+        run user_systemctl claw daemon-reload
+        run user_systemctl claw start openclaw.service
         track_service "openclaw (user@claw)"
     fi
 

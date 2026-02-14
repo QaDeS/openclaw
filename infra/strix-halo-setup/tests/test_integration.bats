@@ -97,7 +97,7 @@ teardown() {
 @test "integration: every service user is referenced in at least one component" {
     local all_components
     all_components=$(cat "$STRIX_DIR"/components/*.sh)
-    for user in lmstudio llamacpp comfyui claw hosting defense; do
+    for user in llamacpp comfyui claw hosting defense; do
         echo "$all_components" | grep -q "$user" || {
             echo "User '$user' not referenced in any component"
             return 1

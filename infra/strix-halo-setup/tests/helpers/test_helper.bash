@@ -286,7 +286,12 @@ load_provision_globals() {
 
     export -f log warn success error run register_component confirm_execution ensure_user is_installed set_local_llm_url set_sshd_directive user_has_ssh enable_ssh_for_user
     export -f init_run_state manifest_record backup_file track_file_create track_file_modify track_service track_symlink track_ufw_rule track_docker track_append undo_note
-    export -f ensure_linger deploy_quadlet track_podman
+    user_systemctl() {
+        local user=$1; shift
+        log "user_systemctl $user $*"
+    }
+
+    export -f ensure_linger deploy_quadlet track_podman user_systemctl
     export -f _cache_key cached_curl_pipe cached_fetch cached_git_clone cached_pip_index_args
 }
 

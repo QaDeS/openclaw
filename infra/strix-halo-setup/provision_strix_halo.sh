@@ -62,10 +62,17 @@ fi
 
 export CACHE_DIR
 
-# Source cache-aware download helpers
-if [ -f "${INFRA_DIR}/lib/cache-helpers.sh" ]; then
-    source "${INFRA_DIR}/lib/cache-helpers.sh"
+# Source cache-aware download helpers.
+# Also publish a world-readable copy so that sudo -u <svc-user> subshells can
+# source it (the operator's home dir may not be traversable by service users).
+CACHE_HELPERS_SRC="${INFRA_DIR}/lib/cache-helpers.sh"
+CACHE_HELPERS="/tmp/strix-cache-helpers.sh"
+if [ -f "$CACHE_HELPERS_SRC" ]; then
+    source "$CACHE_HELPERS_SRC"
+    cp "$CACHE_HELPERS_SRC" "$CACHE_HELPERS"
+    chmod 644 "$CACHE_HELPERS"
 fi
+export CACHE_HELPERS
 
 # --- Colors & Logging ---
 BLUE='\033[0;34m'
@@ -464,9 +471,44 @@ enable_ssh_for_user() {
 # Enable linger for a user so rootless podman services survive logout.
 ensure_linger() {
     local user=$1
+    local uid
+    uid=$(id -u "$user")
+
     if ! loginctl show-user "$user" -p Linger 2>/dev/null | grep -q "yes"; then
         run loginctl enable-linger "$user"
     fi
+
+    # For freshly-created users, linger alone isn't enough — the user
+    # manager (user@<uid>.service) may not be running yet. Start it
+    # explicitly so that quadlet generation and systemctl --user work.
+    if ! systemctl is-active --quiet "user@${uid}.service"; then
+        systemctl start "user@${uid}.service"
+    fi
+}
+
+# Run systemctl --user as another user with the correct XDG_RUNTIME_DIR.
+# Without this, "sudo -u <user> systemctl --user" fails with
+# "Failed to connect to bus: No medium found / No such file or directory"
+# because the D-Bus session socket path is unknown or the runtime dir
+# hasn't been created yet for freshly-created service users.
+user_systemctl() {
+    local user=$1; shift
+    local uid
+    uid=$(id -u "$user")
+    local rtdir="/run/user/${uid}"
+
+    # Ensure the runtime dir exists (systemd-logind creates it on login,
+    # but lingering users that never logged in may not have it yet).
+    if [ ! -d "$rtdir" ]; then
+        mkdir -p "$rtdir"
+        chown "${user}:${user}" "$rtdir"
+        chmod 700 "$rtdir"
+    fi
+
+    sudo -u "$user" \
+        XDG_RUNTIME_DIR="$rtdir" \
+        DBUS_SESSION_BUS_ADDRESS="unix:path=${rtdir}/bus" \
+        systemctl --user "$@"
 }
 
 # Deploy a quadlet file to a user's systemd directory and reload.
@@ -542,7 +584,7 @@ is_installed() {
     case "$id" in
         BASE)      ls -d /opt/rocm-${ROCM_VERSION}* >/dev/null 2>&1 ;;
         OPENCLAW)  [ -d /home/claw/openclaw/.git ] && systemctl is-enabled openclaw >/dev/null 2>&1 ;;
-        LMSTUDIO)  [ -f /home/lmstudio/.lmstudio/bin/lms ] && systemctl is-enabled llmster >/dev/null 2>&1 ;;
+        LMSTUDIO)  local _lms_home; _lms_home=$(getent passwd "${SUDO_USER}" 2>/dev/null | cut -d: -f6); [ -f "${_lms_home}/.lmstudio/bin/lms" ] ;;
         LLAMACPP)  [ -x /home/llamacpp/llama.cpp/build/bin/llama-server ] && systemctl is-enabled llamacpp >/dev/null 2>&1 ;;
         SYNC_LLAMA) [ -x /usr/local/bin/sync-llama-models.sh ] && systemctl is-enabled sync-llama-models >/dev/null 2>&1 ;;
         COMFYUI)   [ -d /home/comfyui/ComfyUI ] && systemctl is-enabled comfyui >/dev/null 2>&1 ;;
@@ -666,7 +708,7 @@ HELPEOF
 
 Access URLs (once provisioned, use ${host} from your laptop):
   RDP Desktop        ssh -L 3389:localhost:3389 ${host}  ->  rdp://localhost:3389
-  LM Studio API      http://${host}:1234/v1
+  LM Studio          ssh -X ${SUDO_USER}@${host} lmstudio  (or use RDP)
   llama.cpp API      http://${host}:11234/v1
   llama.cpp UI       http://${host}:11234
   ComfyUI            http://${host}:8188
@@ -788,7 +830,7 @@ print_urls() {
                 fi
                 ;;
             LMSTUDIO)
-                echo -e "  ${GREEN}LM Studio API${NC}      http://${host}:1234/v1"
+                echo -e "  ${GREEN}LM Studio${NC}          ssh -X user@${host} lmstudio  (or use RDP desktop)"
                 any=true
                 ;;
             LLAMACPP)

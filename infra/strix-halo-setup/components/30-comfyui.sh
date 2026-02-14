@@ -15,16 +15,17 @@ install_comfyui() {
     if [ "$DRY_RUN" = false ]; then
         if [ -d "$repo_dir" ] && [ "$REDOWNLOAD" = false ]; then
             log "ComfyUI already cloned, pulling latest..."
+            sudo -u comfyui git -C "$repo_dir" checkout -- .
             sudo -u comfyui git -C "$repo_dir" pull --rebase
         else
             sudo -u comfyui rm -rf "$repo_dir"
-            sudo -u comfyui bash -c "source '${INFRA_DIR}/lib/cache-helpers.sh' && cached_git_clone 'https://github.com/comfyanonymous/ComfyUI.git' '$repo_dir'"
+            sudo -u comfyui bash -c "source '${CACHE_HELPERS}' && cached_git_clone 'https://github.com/comfyanonymous/ComfyUI.git' '$repo_dir'"
         fi
     fi
 
     if [ "$DRY_RUN" = false ]; then
         # Install uv
-        sudo -u comfyui bash -c "source '${INFRA_DIR}/lib/cache-helpers.sh' && cached_curl_pipe 'https://astral.sh/uv/install.sh' sh"
+        sudo -u comfyui bash -c "source '${CACHE_HELPERS}' && cached_curl_pipe 'https://astral.sh/uv/install.sh' sh"
         # Create venv
         sudo -u comfyui "$UV" --no-config venv "$venv_dir"
         # Install ROCm specific PyTorch for GFX1151
@@ -71,10 +72,11 @@ install_comfyui_manager() {
     if [ "$DRY_RUN" = false ]; then
         if [ -d "$manager_dir" ] && [ "$REDOWNLOAD" = false ]; then
             log "ComfyUI Manager already installed, pulling latest..."
+            sudo -u comfyui git -C "$manager_dir" checkout -- .
             sudo -u comfyui git -C "$manager_dir" pull --rebase
         else
             sudo -u comfyui rm -rf "$manager_dir"
-            sudo -u comfyui bash -c "source '${INFRA_DIR}/lib/cache-helpers.sh' && cached_git_clone 'https://github.com/ltdrdata/ComfyUI-Manager.git' '$manager_dir'"
+            sudo -u comfyui bash -c "source '${CACHE_HELPERS}' && cached_git_clone 'https://github.com/ltdrdata/ComfyUI-Manager.git' '$manager_dir'"
         fi
 
         # Install Manager dependencies
