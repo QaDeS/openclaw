@@ -1,20 +1,33 @@
 #!/bin/bash
-# run-tests.sh — Build and run the strix provisioning test suite in Docker.
+# run-tests.sh — Build and run the strix provisioning test suite in Docker or VM.
 #
 # Usage:
 #   From anywhere (automatically finds strix-halo-setup):
 #     ./infra/strix-halo-setup/tests/run-tests.sh            # build + run in Docker
 #     ./infra/strix-halo-setup/tests/run-tests.sh --local    # run bats directly (inside container or CI)
 #     ./infra/strix-halo-setup/tests/run-tests.sh --no-tmpfs # disable tmpfs overlay (low RAM)
+#     ./infra/strix-halo-setup/tests/run-tests.sh --vm       # run provisioning in VM with GPU passthrough
 #
 #   Filter tests:
 #     ./infra/strix-halo-setup/tests/run-tests.sh test_force_mode.bats
 #     ./infra/strix-halo-setup/tests/run-tests.sh --local test_shellcheck.bats
+#
+#   VM mode (--vm):
+#     ./run-tests.sh --vm                    # Full test cycle (setup + provision + health checks)
+#     ./run-tests.sh --vm setup              # Only VM setup (download image, generate keys)
+#     ./run-tests.sh --vm provision          # Run provisioning in existing VM
+#     ./run-tests.sh --vm health             # Run health checks in existing VM
+#     ./run-tests.sh --vm cleanup            # Stop VM and reattach GPU
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STRIX_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+VM_HELPER="${SCRIPT_DIR}/vm/prepare-vm.sh"
+
+# =============================================================================
+# Mode: Local (bats directly)
+# =============================================================================
 
 if [[ "${1:-}" == "--local" ]]; then
     shift
@@ -26,7 +39,52 @@ if [[ "${1:-}" == "--local" ]]; then
     fi
 fi
 
-# --- Docker mode ---
+# =============================================================================
+# Mode: VM (KVM with GPU passthrough)
+# =============================================================================
+
+if [[ "${1:-}" == "--vm" ]]; then
+    shift
+    
+    if [[ ! -x "$VM_HELPER" ]]; then
+        echo "ERROR: VM helper not found: $VM_HELPER"
+        exit 1
+    fi
+    
+    # Show warning banner
+    echo ""
+    echo "================================================================================"
+    echo "WARNING: GPU PASSTHROUGH TEST"
+    echo ""
+    echo "This test will detach your GPU (c5:00.0) from the host and pass it to a VM."
+    echo "Your display will go BLACK during the test."
+    echo ""
+    echo "After the test completes:"
+    echo "  - The VM will shut down"
+    echo "  - Your GPU will be re-attached to the host"
+    echo "  - The display manager will restart automatically"
+    echo ""
+    echo "To abort NOW: Press Ctrl+C within 10 seconds, or SSH in from another machine and run:"
+    echo "  virsh destroy strix-test-vm"
+    echo ""
+    echo "================================================================================"
+    echo ""
+    
+    # Countdown
+    for i in $(seq 10 -1 1); do
+        echo -ne "\rStarting in $i seconds... "
+        sleep 1
+    done
+    echo ""
+    echo ""
+    
+    # Run VM helper with all remaining args
+    exec "$VM_HELPER" "$@"
+fi
+
+# =============================================================================
+# Mode: Docker (default)
+# =============================================================================
 
 USE_TMPFS=true
 if [[ "${1:-}" == "--no-tmpfs" ]]; then
