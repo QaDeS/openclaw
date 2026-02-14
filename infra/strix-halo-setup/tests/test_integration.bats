@@ -111,6 +111,10 @@ teardown() {
     for service_file in "$STRIX_DIR"/systemd/*.service; do
         local service_name
         service_name=$(basename "$service_file" .service)
+        # openclaw is managed via Podman Quadlet (user_systemctl, not systemctl enable)
+        case "$service_name" in
+            openclaw) continue ;;
+        esac
         echo "$all_components" | grep -q "systemctl.*enable.*$service_name" || {
             echo "No component enables service: $service_name"
             return 1

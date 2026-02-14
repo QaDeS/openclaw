@@ -25,7 +25,7 @@ QUADLET_DIR="$STRIX_DIR/quadlet"
 # --- Quadlet files (primary container config) ---
 
 @test "quadlet: all hosting quadlet files exist" {
-    [ -f "$QUADLET_DIR/hosting.pod" ]
+    [ -f "$QUADLET_DIR/hosting.target" ]
     [ -f "$QUADLET_DIR/hosting-net.network" ]
     [ -f "$QUADLET_DIR/supabase-data.volume" ]
     [ -f "$QUADLET_DIR/supabase.container" ]

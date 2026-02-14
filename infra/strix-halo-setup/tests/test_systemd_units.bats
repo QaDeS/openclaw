@@ -15,10 +15,6 @@ SYSTEMD_DIR="$STRIX_DIR/systemd"
     [ -f "$SYSTEMD_DIR/openclaw.service" ]
 }
 
-@test "systemd: hosting.service exists" {
-    [ -f "$SYSTEMD_DIR/hosting.service" ]
-}
-
 @test "systemd: cisco-defense.service exists" {
     [ -f "$SYSTEMD_DIR/cisco-defense.service" ]
 }
@@ -35,10 +31,10 @@ SYSTEMD_DIR="$STRIX_DIR/systemd"
     [ -f "$SYSTEMD_DIR/sync-llama-models.service" ]
 }
 
-@test "systemd: exactly 8 service units exist" {
+@test "systemd: exactly 7 service units exist" {
     local count
     count=$(ls "$SYSTEMD_DIR"/*.service 2>/dev/null | wc -l)
-    [ "$count" -eq 8 ]
+    [ "$count" -eq 7 ]
 }
 
 @test "systemd: upnp-ssh.service exists" {
@@ -125,10 +121,6 @@ SYSTEMD_DIR="$STRIX_DIR/systemd"
     grep -q "^User=claw" "$SYSTEMD_DIR/openclaw.service"
 }
 
-@test "systemd: hosting.service runs as hosting user" {
-    grep -q "^User=hosting" "$SYSTEMD_DIR/hosting.service"
-}
-
 @test "systemd: cisco-defense.service runs as defense user" {
     grep -q "^User=defense" "$SYSTEMD_DIR/cisco-defense.service"
 }
@@ -139,12 +131,8 @@ SYSTEMD_DIR="$STRIX_DIR/systemd"
     grep -q "^Type=oneshot" "$SYSTEMD_DIR/openclaw.service"
 }
 
-@test "systemd: hosting.service is type oneshot" {
-    grep -q "^Type=oneshot" "$SYSTEMD_DIR/hosting.service"
-}
-
 @test "systemd: oneshot services have RemainAfterExit=yes" {
-    for f in "$SYSTEMD_DIR/openclaw.service" "$SYSTEMD_DIR/hosting.service"; do
+    for f in "$SYSTEMD_DIR/openclaw.service"; do
         grep -q "RemainAfterExit=yes" "$f" || { echo "Missing RemainAfterExit in $(basename "$f")"; return 1; }
     done
 }
@@ -153,10 +141,6 @@ SYSTEMD_DIR="$STRIX_DIR/systemd"
 
 @test "systemd: openclaw.service requires docker.service" {
     grep -q "Requires=docker.service" "$SYSTEMD_DIR/openclaw.service"
-}
-
-@test "systemd: hosting.service requires docker.service" {
-    grep -q "Requires=docker.service" "$SYSTEMD_DIR/hosting.service"
 }
 
 # --- Restart policies ---

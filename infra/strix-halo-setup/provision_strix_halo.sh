@@ -729,6 +729,19 @@ Access URLs (once provisioned, use ${host} from your laptop):
 
 Upload models to ComfyUI:
   rsync -avP -e ssh --rsync-path="sudo -u comfyui rsync" <file> $(logname)@${host}:/home/comfyui/ComfyUI/models/<subdir>/
+
+Service management:
+  System services (llamacpp, comfyui, ace-step, cisco-defense, sync-llama-models):
+    sudo systemctl stop|start|restart|status <service>
+    sudo journalctl -u <service> -f           # follow logs
+
+  User services — Hosting stack (rootless podman quadlets, user=hosting):
+    sudo -u hosting XDG_RUNTIME_DIR=/run/user/\$(id -u hosting) systemctl --user stop|start|restart hosting.target
+    sudo -u hosting XDG_RUNTIME_DIR=/run/user/\$(id -u hosting) systemctl --user status supabase wordpress
+
+  User services — OpenClaw (rootless podman quadlet, user=claw):
+    sudo -u claw XDG_RUNTIME_DIR=/run/user/\$(id -u claw) systemctl --user stop|start|restart openclaw.service
+    sudo -u claw XDG_RUNTIME_DIR=/run/user/\$(id -u claw) systemctl --user status openclaw
 URLEOF
     exit 0
 }

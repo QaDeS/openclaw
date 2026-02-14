@@ -266,8 +266,9 @@ load_provision_globals() {
 
     # Cache helpers
     export CACHE_DIR=""
-    if [ -f "$STRIX_DIR/lib/cache-helpers.sh" ]; then
-        source "$STRIX_DIR/lib/cache-helpers.sh"
+    export CACHE_HELPERS="$STRIX_DIR/lib/cache-helpers.sh"
+    if [ -f "$CACHE_HELPERS" ]; then
+        source "$CACHE_HELPERS"
     fi
 
     # Podman / Quadlet helpers

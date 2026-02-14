@@ -7,8 +7,8 @@ QUADLET_DIR="$STRIX_DIR/quadlet"
 
 # --- File existence ---
 
-@test "quadlet: hosting.pod exists" {
-    [ -f "$QUADLET_DIR/hosting.pod" ]
+@test "quadlet: hosting.target exists" {
+    [ -f "$QUADLET_DIR/hosting.target" ]
 }
 
 @test "quadlet: hosting-net.network exists" {
@@ -37,8 +37,8 @@ QUADLET_DIR="$STRIX_DIR/quadlet"
 
 # --- INI syntax (all quadlet files have [Unit] or [Pod] or [Network] or [Volume] section) ---
 
-@test "quadlet: hosting.pod has [Pod] section" {
-    grep -q '^\[Pod\]' "$QUADLET_DIR/hosting.pod"
+@test "quadlet: hosting.target has [Unit] section" {
+    grep -q '^\[Unit\]' "$QUADLET_DIR/hosting.target"
 }
 
 @test "quadlet: hosting-net.network has [Network] section" {
@@ -105,12 +105,12 @@ QUADLET_DIR="$STRIX_DIR/quadlet"
 
 # --- Hosting pod references ---
 
-@test "quadlet: supabase references hosting pod" {
-    grep -q 'Pod=hosting' "$QUADLET_DIR/supabase.container"
+@test "quadlet: supabase references hosting target via PartOf" {
+    grep -q 'PartOf=hosting.target' "$QUADLET_DIR/supabase.container"
 }
 
-@test "quadlet: wordpress references hosting pod" {
-    grep -q 'Pod=hosting' "$QUADLET_DIR/wordpress.container"
+@test "quadlet: wordpress references hosting target via PartOf" {
+    grep -q 'PartOf=hosting.target' "$QUADLET_DIR/wordpress.container"
 }
 
 @test "quadlet: supabase uses hosting-net network" {
