@@ -62,20 +62,24 @@ install_ssh_user_hook() {
 deploy_ecryptfs_helpers() {
     log "Deploying ecryptfs login/logout helpers..."
 
-    # Patch /etc/pam.d/sshd to skip pam_ecryptfs.so so SSH pubkey login
-    # doesn't fail trying to mount ecryptfs without a password.
+    # Disable pam_ecryptfs.so for SSH so pubkey login works without a
+    # password. On Ubuntu 24.04, pam_ecryptfs isn't directly in
+    # /etc/pam.d/sshd — it's pulled in via @include common-auth and
+    # @include common-session-noninteractive. We patch all PAM files
+    # that reference pam_ecryptfs: the sshd file itself AND the common
+    # files it includes.
     # The profile.d hook below handles mounting once the shell is ready.
-    local pam_sshd="/etc/pam.d/sshd"
     local marker="# strix-skip-ecryptfs"
-    if [ -f "$pam_sshd" ] && ! grep -q "$marker" "$pam_sshd" 2>/dev/null; then
-        if [ "$DRY_RUN" = false ]; then
-            backup_file "$pam_sshd"
-            # Comment out any pam_ecryptfs.so lines and tag with our marker
-            sed -i "s/^\(.*pam_ecryptfs\.so.*\)$/$marker\n# \\1/" "$pam_sshd"
-            log "Disabled pam_ecryptfs in $pam_sshd"
-        else
-            log "${YELLOW}[DRY-RUN] Will disable pam_ecryptfs in ${pam_sshd}${NC}"
-        fi
+    if [ "$DRY_RUN" = false ]; then
+        for pam_file in /etc/pam.d/sshd /etc/pam.d/common-auth /etc/pam.d/common-session /etc/pam.d/common-session-noninteractive; do
+            if [ -f "$pam_file" ] && grep -q "pam_ecryptfs" "$pam_file" && ! grep -q "$marker" "$pam_file"; then
+                backup_file "$pam_file"
+                sed -i "s/^\(.*pam_ecryptfs\.so.*\)$/${marker}\n# \\1/" "$pam_file"
+                log "Disabled pam_ecryptfs in $pam_file"
+            fi
+        done
+    else
+        log "${YELLOW}[DRY-RUN] Will disable pam_ecryptfs in sshd PAM config${NC}"
     fi
 
     # Auto-mount encrypted home on login

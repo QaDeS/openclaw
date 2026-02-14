@@ -11,7 +11,8 @@ Environment=NODE_ENV=production
 Environment=LOCAL_LLM_URL=%LOCAL_LLM_URL%
 
 [Service]
-Restart=always
+Restart=on-failure
+RestartSec=10
 
 [Install]
 WantedBy=default.target

@@ -406,11 +406,22 @@ set_local_llm_url() {
 # Idempotently set an sshd_config directive — replace if exists (commented or not), append if absent.
 set_sshd_directive() {
     local key=$1 value=$2
-    local config="/etc/ssh/sshd_config"
-    if grep -qE "^#?\s*${key}\b" "$config" 2>/dev/null; then
-        run sed -i "s|^#\?\s*${key}\b.*|${key} ${value}|" "$config"
+    # Use a drop-in config in sshd_config.d/ to ensure our setting wins.
+    # Ubuntu 24.04's sshd_config has "Include /etc/ssh/sshd_config.d/*.conf"
+    # at the top — first match wins, so a high-priority filename ensures
+    # our directive takes effect before any distro defaults.
+    local drop_in="/etc/ssh/sshd_config.d/00-strix.conf"
+    if [ "$DRY_RUN" = false ]; then
+        mkdir -p /etc/ssh/sshd_config.d
+        # Update or append the directive in our drop-in file
+        if [ -f "$drop_in" ] && grep -q "^${key} " "$drop_in" 2>/dev/null; then
+            sed -i "s|^${key} .*|${key} ${value}|" "$drop_in"
+        else
+            echo "${key} ${value}" >> "$drop_in"
+        fi
+        track_file_create "$drop_in"
     else
-        run tee -a "$config" <<< "${key} ${value}"
+        log "${YELLOW}[DRY-RUN] Will set ${key} in ${drop_in}${NC}"
     fi
 }
 
@@ -602,7 +613,7 @@ is_installed() {
         COMFYUI)   [ -d /home/comfyui/ComfyUI ] && systemctl is-enabled comfyui >/dev/null 2>&1 ;;
         ZIMAGE)    [ -d /home/comfyui/ComfyUI ] && /home/comfyui/.local/bin/uv --no-config pip show accelerate >/dev/null 2>&1 ;;
         ACE_STEP)  [ -d /home/comfyui/ACE-Step-1.5 ] && systemctl is-enabled ace-step >/dev/null 2>&1 ;;
-        SSH_OUTSIDE_HOME) [ -d /etc/ssh/users ] && grep -q "/etc/ssh/users" /etc/ssh/sshd_config 2>/dev/null ;;
+        SSH_OUTSIDE_HOME) [ -d /etc/ssh/users ] && grep -rq "/etc/ssh/users" /etc/ssh/sshd_config /etc/ssh/sshd_config.d/ 2>/dev/null ;;
         SSH_HARDENING)    grep -q "PermitRootLogin prohibit-password" /etc/ssh/sshd_config 2>/dev/null && systemctl is-enabled fail2ban >/dev/null 2>&1 ;;
         SECURITY)  [ -f /home/defense/cisco-defense-daemon.py ] && systemctl is-enabled cisco-defense >/dev/null 2>&1 && systemctl is-enabled hosting >/dev/null 2>&1 ;;
         PODMAN)    command -v podman &>/dev/null ;;

@@ -10,7 +10,8 @@ Environment=PASSWORD=%PASSWORD%
 AutoUpdate=registry
 
 [Service]
-Restart=always
+Restart=on-failure
+RestartSec=30
 
 [Install]
 WantedBy=default.target

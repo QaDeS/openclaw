@@ -46,9 +46,12 @@ teardown() {
     [ "$_status" -eq 0 ]
 }
 
-@test "ssh-outside-home: deploy_ecryptfs_helpers patches pam_ecryptfs out of sshd" {
+@test "ssh-outside-home: deploy_ecryptfs_helpers patches pam_ecryptfs out of PAM files" {
     grep -q 'pam_ecryptfs' "$STRIX_DIR/components/05-ssh.sh"
     grep -q '/etc/pam.d/sshd' "$STRIX_DIR/components/05-ssh.sh"
+    # Also patches common-auth and common-session (where Ubuntu 24.04 has pam_ecryptfs)
+    grep -q 'common-auth' "$STRIX_DIR/components/05-ssh.sh"
+    grep -q 'common-session' "$STRIX_DIR/components/05-ssh.sh"
 }
 
 @test "ssh-outside-home: deploy_ecryptfs_helpers skips PAM patch in dry-run" {
@@ -58,8 +61,7 @@ teardown() {
 @test "ssh-outside-home: deploy_ecryptfs_helpers PAM patch is idempotent" {
     # Marker guard prevents re-patching
     grep -q 'strix-skip-ecryptfs' "$STRIX_DIR/components/05-ssh.sh"
-    grep -q 'grep -q.*marker.*pam_sshd' "$STRIX_DIR/components/05-ssh.sh" ||
-        grep -q '! grep -q "$marker"' "$STRIX_DIR/components/05-ssh.sh"
+    grep -q '! grep -q "$marker"' "$STRIX_DIR/components/05-ssh.sh"
 }
 
 # --- Content checks ---
@@ -78,6 +80,10 @@ teardown() {
 
 @test "ssh-outside-home: setup_ssh_outside_home mentions AuthorizedKeysFile" {
     grep -q "AuthorizedKeysFile" "$STRIX_DIR/components/05-ssh.sh"
+}
+
+@test "ssh-outside-home: set_sshd_directive uses drop-in config" {
+    grep -q "sshd_config.d" "$STRIX_DIR/provision_strix_halo.sh"
 }
 
 @test "ssh-outside-home: setup_ssh_outside_home validates with sshd -t" {
