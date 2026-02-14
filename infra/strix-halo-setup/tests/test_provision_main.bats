@@ -30,8 +30,8 @@ teardown() {
     type -t ensure_user | grep -q "function"
 }
 
-@test "global config: LOCAL_LLM_URL default is LM Studio port" {
-    [ "$LOCAL_LLM_URL" = "http://localhost:1234/v1" ]
+@test "global config: LOCAL_LLM_URL default is llama.cpp port" {
+    [ "$LOCAL_LLM_URL" = "http://localhost:11234/v1" ]
 }
 
 # --- DRY_RUN mode ---

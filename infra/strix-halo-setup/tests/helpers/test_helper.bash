@@ -165,7 +165,7 @@ load_provision_globals() {
     export SHARED_MODEL_DIR="$TEST_TMPDIR/models"
     export ACE_STEP_MODEL_URL="https://huggingface.co/Linaqruf/ace-step-1.5-turbo-aio/resolve/main/ace_step_1.5_turbo_aio.safetensors"
     export HSA_OVERRIDE="11.5.1"
-    export LOCAL_LLM_URL="http://localhost:1234/v1"
+    export LOCAL_LLM_URL="http://localhost:11234/v1"
     export SSH_USERS="testuser"
     export SSH_UPNP_PORT=""
     export DDNS_FQDN=""
