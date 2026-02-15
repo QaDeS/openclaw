@@ -436,7 +436,7 @@ if [[ -n "$procs" ]]; then
         pkill -KILL -u "$UID_NUM" 2>/dev/null || true
         # retry loop: ensure all processes are dead before userdel
         for _attempt in 1 2 3; do
-            remaining=$(ps -u "$UID_NUM" 2>/dev/null | wc -l)
+            remaining=$(ps -u "$UID_NUM" 2>/dev/null | wc -l) || true
             if [[ "$remaining" -le 1 ]]; then break; fi
             pkill -KILL -u "$UID_NUM" 2>/dev/null || true
             sleep 1
