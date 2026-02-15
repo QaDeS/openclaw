@@ -749,8 +749,14 @@ step "Orphaned files owned by uid $UID_NUM"
 if $SKIP_ORPHAN_SCAN; then
     log_skip "skipped — --skip-orphan-scan was set"
 else
+    # build exclusion list (always exclude /proc, /sys; add SSH keys dir when --keep-keys)
+    _find_excludes=( -not -path "/proc/*" -not -path "/sys/*" )
+    if $KEEP_KEYS && [[ -d "$ssh_user_dir" ]]; then
+        _find_excludes+=( -not -path "${ssh_user_dir}/*" -not -path "$ssh_user_dir" )
+    fi
+
     orphans=$(find / -xdev -uid "$UID_NUM" \
-        -not -path "/proc/*" -not -path "/sys/*" \
+        "${_find_excludes[@]}" \
         2>/dev/null | head -20 || true)
     if [[ -n "$orphans" ]]; then
         while read -r f; do
@@ -764,7 +770,7 @@ else
             log_action "delete all files owned by uid $UID_NUM"
             if $FORCE; then
                 find / -xdev -uid "$UID_NUM" \
-                    -not -path "/proc/*" -not -path "/sys/*" \
+                    "${_find_excludes[@]}" \
                     -delete 2>/dev/null || true
             fi
         else

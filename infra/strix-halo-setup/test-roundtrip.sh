@@ -215,6 +215,26 @@ echo "$JSON_OUT" | grep -qF '"steps":[' && pass "--dry-run-json steps array" || 
 userdel -r jsonuser 2>/dev/null || true
 
 echo ""
+echo "=== Phase 2d: --keep-keys survives --nuke-orphans ==="
+# create a throwaway user to test --keep-keys + --nuke-orphans interaction
+useradd -m -s /bin/bash -u 1800 keepuser 2>/dev/null || \
+    (groupadd -g 1800 keepuser && useradd -m -s /bin/bash -u 1800 -g 1800 keepuser)
+mkdir -p /etc/ssh/users/keepuser
+echo "ssh-ed25519 AAAA_keep_key keepuser@host" > /etc/ssh/users/keepuser/authorized_keys
+chown -R 1800:1800 /etc/ssh/users/keepuser
+# also drop a file outside the SSH dir to confirm nuke-orphans still works
+mkdir -p /opt/keepuser-stray
+echo "stray" > /opt/keepuser-stray/file.txt
+chown -R 1800:1800 /opt/keepuser-stray
+/opt/scripts/remove-user.sh --force -y --keep-keys --nuke-orphans --skip-orphan-scan testuser keepuser 2>/dev/null || \
+    /opt/scripts/remove-user.sh --force -y --keep-keys --nuke-orphans keepuser
+[[ -d /etc/ssh/users/keepuser ]] && pass "--keep-keys preserved SSH dir through removal" || fail "--keep-keys SSH dir deleted"
+[[ -f /etc/ssh/users/keepuser/authorized_keys ]] && pass "--keep-keys preserved authorized_keys" || fail "--keep-keys authorized_keys deleted"
+! [[ -d /opt/keepuser-stray ]] && pass "--nuke-orphans deleted stray files" || fail "--nuke-orphans left stray files"
+# clean up
+rm -rf /etc/ssh/users/keepuser /opt/keepuser-stray 2>/dev/null || true
+
+echo ""
 echo "=== Phase 3: Restore user ==="
 /opt/scripts/restore-user.sh --force -y --restore-ssh-keys "$TARBALL"
 
