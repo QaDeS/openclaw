@@ -393,6 +393,29 @@ ensure_user() {
     fi
 }
 
+# Set up subuid/subgid ranges for rootless podman.
+# Without these, container image pulls fail with "insufficient UIDs or GIDs
+# available in user namespace". Each user gets a non-overlapping 65536-UID range.
+ensure_subuid() {
+    local user=$1
+    if [ "$DRY_RUN" = true ]; then
+        log "${YELLOW}[DRY-RUN] Will ensure subuid/subgid for ${user}${NC}"
+        return
+    fi
+    if ! grep -q "^${user}:" /etc/subuid 2>/dev/null; then
+        usermod --add-subuids 100000-165535 "$user" 2>/dev/null \
+            || usermod --add-subuids 200000-265535 "$user" 2>/dev/null \
+            || usermod --add-subuids 300000-365535 "$user"
+        log "Added subuid range for ${user}"
+    fi
+    if ! grep -q "^${user}:" /etc/subgid 2>/dev/null; then
+        usermod --add-subgids 100000-165535 "$user" 2>/dev/null \
+            || usermod --add-subgids 200000-265535 "$user" 2>/dev/null \
+            || usermod --add-subgids 300000-365535 "$user"
+        log "Added subgid range for ${user}"
+    fi
+}
+
 set_local_llm_url() {
     local url=$1
     LOCAL_LLM_URL="$url"

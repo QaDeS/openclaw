@@ -42,6 +42,9 @@ install_hosting_stack() {
         chown -R hosting:hosting /home/hosting
     fi
 
+    # Rootless podman needs subuid/subgid ranges
+    ensure_subuid hosting
+
     # Deploy quadlet + target files for rootless podman
     local quadlet_dir="/home/hosting/.config/containers/systemd"
     local systemd_dir="/home/hosting/.config/systemd/user"

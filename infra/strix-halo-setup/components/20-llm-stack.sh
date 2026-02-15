@@ -69,6 +69,9 @@ install_openclaw_stack() {
         track_file_create /home/claw/.openclaw/env
     fi
 
+    # Rootless podman needs subuid/subgid ranges
+    ensure_subuid claw
+
     # Deploy quadlet (rootless podman via systemd)
     local quadlet_src="${INFRA_DIR}/quadlet/openclaw.container"
     if [ -f "$quadlet_src" ]; then

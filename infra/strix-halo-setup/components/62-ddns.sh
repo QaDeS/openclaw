@@ -37,6 +37,9 @@ install_ddns() {
         ddns_home="/home/ddns"
     fi
 
+    # Rootless podman needs subuid/subgid ranges
+    ensure_subuid ddns
+
     # Create secrets directory
     run mkdir -p /home/ddns/.secrets
     run chmod 700 /home/ddns/.secrets
