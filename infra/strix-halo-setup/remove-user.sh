@@ -773,9 +773,15 @@ else
         "${_find_excludes[@]}" \
         2>/dev/null || true)
     if [[ -n "$orphans" ]]; then
-        _orphan_summary=$(echo "$orphans" | paste -sd, | sed 's/,/, /g')
         count=$(echo "$orphans" | wc -l)
-        log_info "${count} orphaned file(s): ${_orphan_summary}"
+        # collapse to unique parent directories, show up to 20
+        _orphan_dirs=$(echo "$orphans" | xargs -I{} dirname {} | sort -u | head -20)
+        _dir_count=$(echo "$_orphan_dirs" | wc -l)
+        _dir_summary=$(echo "$_orphan_dirs" | paste -sd, | sed 's/,/, /g')
+        if [[ "$_dir_count" -ge 20 ]]; then
+            _dir_summary+=", ..."
+        fi
+        log_info "${count} orphaned file(s) in ${_dir_count} dir(s): ${_dir_summary}"
         if $NUKE_ORPHANS; then
             log_action "delete all files owned by uid $UID_NUM"
             if $FORCE; then
