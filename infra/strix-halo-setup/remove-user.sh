@@ -15,6 +15,7 @@ SKIP_ORPHAN_SCAN=false
 REVOKE_SSH=false
 NUKE_ORPHANS=false
 DRY_RUN_JSON=false
+SAVE_SHADOW=false
 QUIET=false
 LOG_FILE=""
 NO_COLOR=false
@@ -23,92 +24,16 @@ CONFIRM=true
 EXIT_CODE=0  # 0=clean, 1=warnings, 2=errors
 STEP=0
 
-# ── colors (auto-disabled when not a TTY) ───────────────────────────
+# ── source shared helpers ──────────────────────────────────────────
 
-setup_colors() {
-    if $NO_COLOR || [[ ! -t 1 ]]; then
-        RED=''; YELLOW=''; GREEN=''; CYAN=''; BOLD=''; RESET=''
-    else
-        RED='\033[0;31m'
-        YELLOW='\033[1;33m'
-        GREEN='\033[0;32m'
-        CYAN='\033[0;36m'
-        BOLD='\033[1m'
-        RESET='\033[0m'
-    fi
-}
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib-common.sh
+source "$SCRIPT_DIR/lib-common.sh"
 
-# ── output helpers ──────────────────────────────────────────────────
+# ── JSON / dry-run-json overrides ──────────────────────────────────
+# Override step/log_action/warn_manual to feed JSON when in JSON mode.
 
-_log_raw() {
-    if [[ -n "$LOG_FILE" ]]; then
-        # strip ANSI for the log file
-        echo -e "$*" | sed 's/\x1b\[[0-9;]*m//g' >> "$LOG_FILE"
-    fi
-}
-
-_echo() {
-    if ! $QUIET; then
-        echo -e "$@"
-    fi
-    _log_raw "$@"
-}
-
-# always print, even in quiet mode (warnings/errors)
-_warn() {
-    echo -e "$@" >&2
-    _log_raw "$@"
-}
-
-step() {
-    STEP=$((STEP + 1))
-    if $DRY_RUN_JSON; then
-        json_step "$1"
-    else
-        _echo "${BOLD}${STEP}. $1${RESET}"
-    fi
-}
-
-log_action() {
-    local label="$1"
-    if $DRY_RUN_JSON; then
-        json_action "$label"
-    elif $FORCE; then
-        _echo "  ${GREEN}[EXEC]${RESET}  $label"
-    else
-        _echo "  ${YELLOW}[DRY]${RESET}   $label"
-    fi
-}
-
-log_keep() {
-    _echo "  ${CYAN}[KEEP]${RESET}  $1"
-}
-
-log_info() {
-    _echo "  ${YELLOW}[INFO]${RESET}  $1"
-}
-
-log_skip() {
-    _echo "  ($1)"
-}
-
-warn_manual() {
-    if $DRY_RUN_JSON; then
-        json_warn "$1"
-    else
-        _warn "  ${YELLOW}[WARN]${RESET}  $1"
-    fi
-    set_exit 1
-}
-
-set_exit() {
-    if [[ "$1" -gt "$EXIT_CODE" ]]; then
-        EXIT_CODE="$1"
-    fi
-}
-
-# ── JSON output helpers (--dry-run-json) ──────────────────────────
-
+_orig_step() { command true; }  # placeholder
 _json_escape() {
     local s="$1"
     s="${s//\\/\\\\}"
@@ -119,9 +44,9 @@ _json_escape() {
 JSON_STEPS=()
 _json_cur_actions=()
 _json_cur_warnings=()
+_json_cur_title=""
 
 json_step() {
-    # flush previous step if any
     _json_flush_step
     _json_cur_title="$1"
     _json_cur_actions=()
@@ -159,27 +84,34 @@ json_emit() {
         "$(_json_escape "$TARGET_USER")" "$UID_NUM" "$steps"
 }
 
-run() {
-    log_action "$*"
-    if $FORCE; then
-        if ! "$@"; then
-            _warn "  ${RED}[FAIL]${RESET}  command failed: $*"
-            set_exit 2
+# apply JSON overrides (called after arg parsing when DRY_RUN_JSON is known)
+_apply_json_overrides() {
+    step() {
+        STEP=$((STEP + 1))
+        if $DRY_RUN_JSON; then
+            json_step "$1"
+        else
+            _echo "${BOLD}${STEP}. $1${RESET}"
         fi
-    fi
-}
-
-# safe alternative to eval — used for sed-in-place on subuid/subgid
-remove_line_from_file() {
-    local pattern="$1" file="$2"
-    log_action "remove lines matching '^${pattern}:' from $file"
-    if $FORCE; then
-        local tmp
-        tmp=$(mktemp)
-        grep -v "^${pattern}:" "$file" > "$tmp" || true
-        cat "$tmp" > "$file"
-        rm -f "$tmp"
-    fi
+    }
+    log_action() {
+        local label="$1"
+        if $DRY_RUN_JSON; then
+            json_action "$label"
+        elif $FORCE; then
+            _echo "  ${GREEN}[EXEC]${RESET}  $label"
+        else
+            _echo "  ${YELLOW}[DRY]${RESET}   $label"
+        fi
+    }
+    warn_manual() {
+        if $DRY_RUN_JSON; then
+            json_warn "$1"
+        else
+            _warn "  ${YELLOW}[WARN]${RESET}  $1"
+        fi
+        set_exit 1
+    }
 }
 
 # ── usage ───────────────────────────────────────────────────────────
@@ -206,9 +138,12 @@ Options:
   --skip-orphan-scan    Skip the final filesystem-wide orphan scan
                         (can be slow on large filesystems)
   --revoke-ssh          Remove lines mentioning the target user from other
-                        users' authorized_keys (default: report-only)
+                        users' authorized_keys (default: report-only).
+                        Revoked lines are saved in the manifest for restore.
   --nuke-orphans        Delete all orphaned files owned by the uid after
                         removal (default: report-only)
+  --save-shadow         Save the password hash from /etc/shadow in the
+                        manifest (sensitive; opt-in only)
   --dry-run-json        Output a machine-readable JSON plan to stdout and
                         exit (implies dry-run, suppresses normal output)
   --yes, -y             Skip the interactive confirmation prompt
@@ -219,7 +154,7 @@ Options:
 
 Steps (in order):
   - Back up all user artifacts (home, crontabs, sudoers, SSH keys,
-    AccountsService, etc.) into a single tarball
+    AccountsService, etc.) into a single tarball with metadata manifest
   - Kill processes, clean IPC objects
   - Remove crontabs, at jobs, systemd units/timers, loginctl sessions
   - Remove temp files, print jobs, XDG runtime dir
@@ -259,13 +194,10 @@ Examples:
 
   # Remove and delete all orphaned files:
   sudo ./remove-user.sh --force --nuke-orphans testuser
-EOF
-}
 
-die() {
-    setup_colors
-    echo -e "${RED}error:${RESET} $*" >&2
-    exit 2
+  # Preserve password hash for seamless restore:
+  sudo ./remove-user.sh --force --save-shadow testuser
+EOF
 }
 
 # ── parse args ──────────────────────────────────────────────────────
@@ -279,6 +211,7 @@ while [[ $# -gt 0 ]]; do
         --skip-orphan-scan)  SKIP_ORPHAN_SCAN=true; shift ;;
         --revoke-ssh)        REVOKE_SSH=true; shift ;;
         --nuke-orphans)      NUKE_ORPHANS=true; shift ;;
+        --save-shadow)       SAVE_SHADOW=true; shift ;;
         --dry-run-json)      DRY_RUN_JSON=true; QUIET=true; NO_COLOR=true; shift ;;
         --yes|-y)            CONFIRM=false; shift ;;
         --quiet|-q)          QUIET=true; shift ;;
@@ -297,6 +230,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 setup_colors
+_apply_json_overrides
 
 [[ -n "$TARGET_USER" ]] || { usage; exit 1; }
 [[ $(id -u) -eq 0 ]] || die "must run as root"
@@ -325,6 +259,9 @@ HOME_DIR=$(echo "$PASSWD_ENTRY" | cut -d: -f6)
 USER_SHELL=$(echo "$PASSWD_ENTRY" | cut -d: -f7)
 USER_GECOS=$(echo "$PASSWD_ENTRY" | cut -d: -f5)
 
+# supplementary groups (comma-separated list, excluding the primary group)
+SUPP_GROUPS=$(id -nG "$TARGET_USER" 2>/dev/null | tr ' ' '\n' | grep -v "^${GROUP_NAME}$" | paste -sd, || true)
+
 # ── validate backup dir early ──────────────────────────────────────
 
 if $BACKUP_HOME; then
@@ -341,7 +278,7 @@ if [[ -n "$LOG_FILE" ]]; then
     [[ -d "$log_dir" && -w "$log_dir" ]] || die "log directory is not writable: $log_dir"
     : > "$LOG_FILE" || die "cannot write to log file: $LOG_FILE"
     _log_raw "remove-user.sh — $(date -Iseconds) — target: $TARGET_USER (uid=$UID_NUM)"
-    _log_raw "arguments: force=$FORCE backup=$BACKUP_HOME keep_keys=$KEEP_KEYS revoke_ssh=$REVOKE_SSH nuke_orphans=$NUKE_ORPHANS"
+    _log_raw "arguments: force=$FORCE backup=$BACKUP_HOME keep_keys=$KEEP_KEYS revoke_ssh=$REVOKE_SSH nuke_orphans=$NUKE_ORPHANS save_shadow=$SAVE_SHADOW"
     _log_raw "---"
 fi
 
@@ -373,6 +310,7 @@ fi
 # ── 1. comprehensive backup ────────────────────────────────────────
 
 step "Backup user artifacts"
+_revoked_keys_list=""
 if $BACKUP_HOME; then
     archive="$BACKUP_DIR/${TARGET_USER}_$(date +%Y%m%d_%H%M%S).tar.gz"
     manifest_tmp="$BACKUP_DIR/.manifest-${TARGET_USER}"
@@ -391,23 +329,46 @@ if $BACKUP_HOME; then
         "/var/lib/AccountsService/icons/$TARGET_USER" \
     ; do
         if [[ -e "$p" ]]; then
-            # store paths relative to / (strip leading /)
             echo "${p#/}" >> "$backup_list"
         fi
     done
 
+    # pre-scan: gather revoked SSH key lines (read-only) before backup
+    _revoked_keys_list=""
+    if $REVOKE_SSH; then
+        while IFS=: read -r _ _ _uid _ _ _hdir _; do
+            [[ "$_uid" -ge 1000 && "$_uid" != "$UID_NUM" ]] || continue
+            _ak="$_hdir/.ssh/authorized_keys"
+            if [[ -f "$_ak" ]] && grep -qi "$TARGET_USER" "$_ak" 2>/dev/null; then
+                _revoked_lines=$(grep -i "$TARGET_USER" "$_ak" 2>/dev/null || true)
+                if [[ -n "$_revoked_lines" ]]; then
+                    while IFS= read -r _rline; do
+                        _encoded=$(echo -n "$_rline" | base64 -w0)
+                        [[ -n "$_revoked_keys_list" ]] && _revoked_keys_list+="|"
+                        _revoked_keys_list+="${_ak}:${_encoded}"
+                    done <<< "$_revoked_lines"
+                fi
+            fi
+        done < /etc/passwd
+    fi
+
     # write metadata manifest
     log_action "write metadata manifest for restore"
     if $FORCE; then
-        # capture subuid/subgid before they're removed
         _sub_uid=""
         _sub_gid=""
         if [[ -f /etc/subuid ]]; then
-            _sub_uid=$(grep "^${TARGET_USER}:" /etc/subuid 2>/dev/null | cut -d: -f2-3 || true)
+            _sub_uid=$(grep "^${TARGET_USER}:" /etc/subuid 2>/dev/null | head -1 | cut -d: -f2-3 || true)
         fi
         if [[ -f /etc/subgid ]]; then
-            _sub_gid=$(grep "^${TARGET_USER}:" /etc/subgid 2>/dev/null | cut -d: -f2-3 || true)
+            _sub_gid=$(grep "^${TARGET_USER}:" /etc/subgid 2>/dev/null | head -1 | cut -d: -f2-3 || true)
         fi
+
+        _shadow_hash=""
+        if $SAVE_SHADOW && [[ -f /etc/shadow ]]; then
+            _shadow_hash=$(getent shadow "$TARGET_USER" 2>/dev/null | cut -d: -f2 || true)
+        fi
+
         cat > "$manifest_tmp" <<MANIFEST
 # remove-user manifest v1
 username=$TARGET_USER
@@ -420,12 +381,15 @@ home=$HOME_DIR
 keep_keys=$KEEP_KEYS
 subuid=$_sub_uid
 subgid=$_sub_gid
+supplementary_groups=$SUPP_GROUPS
+shadow_hash=$_shadow_hash
+revoked_ssh_keys=$_revoked_keys_list
 removed_at=$(date -Iseconds)
 MANIFEST
-        # include manifest in tarball (relative path from /)
         echo "${manifest_tmp#/}" >> "$backup_list"
     fi
 
+    # create tarball immediately (before any destructive steps)
     entry_count=$(wc -l < "$backup_list")
     if [[ "$entry_count" -gt 0 ]]; then
         log_action "tar czf $archive (${entry_count} path(s) from /)"
@@ -465,7 +429,7 @@ if [[ -n "$procs" ]]; then
         # retry loop: ensure all processes are dead before userdel
         for _attempt in 1 2 3; do
             remaining=$(ps -u "$UID_NUM" 2>/dev/null | wc -l)
-            if [[ "$remaining" -le 1 ]]; then break; fi  # header line only
+            if [[ "$remaining" -le 1 ]]; then break; fi
             pkill -KILL -u "$UID_NUM" 2>/dev/null || true
             sleep 1
         done
@@ -530,7 +494,6 @@ step "systemd user services, timers & lingering"
 
 # stop running user timers/services before removing files
 if $FORCE && command -v systemctl &>/dev/null; then
-    # try to stop the user manager; ignore failures (may already be gone)
     systemctl stop "user@${UID_NUM}.service" 2>/dev/null || true
 fi
 
@@ -622,16 +585,6 @@ if ! $found_containers; then log_skip "no rootless container data"; fi
 # ── subuid / subgid ─────────────────────────────────────────────────
 
 step "/etc/subuid and /etc/subgid"
-# capture ranges before deletion (for manifest)
-SAVED_SUBUID=""
-SAVED_SUBGID=""
-if [[ -f /etc/subuid ]]; then
-    SAVED_SUBUID=$(grep "^${TARGET_USER}:" /etc/subuid 2>/dev/null | cut -d: -f2-3 || true)
-fi
-if [[ -f /etc/subgid ]]; then
-    SAVED_SUBGID=$(grep "^${TARGET_USER}:" /etc/subgid 2>/dev/null | cut -d: -f2-3 || true)
-fi
-
 for f in /etc/subuid /etc/subgid; do
     if [[ -f "$f" ]] && grep -q "^${TARGET_USER}:" "$f" 2>/dev/null; then
         remove_line_from_file "$TARGET_USER" "$f"
@@ -736,7 +689,6 @@ if command -v faillog &>/dev/null; then
     fi
     cleaned_login=true
 fi
-# lastlog has no reset command; just note it
 if [[ -f /var/log/lastlog ]]; then
     log_info "lastlog entry will become orphaned (uid $UID_NUM) — cosmetic only"
 fi
