@@ -1,6 +1,7 @@
 #!/bin/bash
 # setup-ssh-for-user — called by adduser.local for new users.
-# Creates /etc/ssh/users/<user>/.ssh/ directory structure.
+# Creates /etc/ssh/users/<user>/ with an empty authorized_keys file.
+# Keys live outside encrypted home so they survive reboots.
 # Does NOT populate authorized_keys (no SSH access granted by default).
 
 set -euo pipefail
@@ -9,16 +10,16 @@ USER="$1"
 
 [ -n "$USER" ] || exit 0
 
-SSH_BASE="/etc/ssh/users/${USER}/.ssh"
+USER_DIR="/etc/ssh/users/${USER}"
 
 # Idempotent: skip if already exists
-[ -d "$SSH_BASE" ] && exit 0
+[ -f "${USER_DIR}/authorized_keys" ] && exit 0
 
-mkdir -p "$SSH_BASE"
-chown "${USER}:${USER}" "/etc/ssh/users/${USER}" "$SSH_BASE"
-chmod 700 "/etc/ssh/users/${USER}" "$SSH_BASE"
+mkdir -p "$USER_DIR"
+chown "${USER}:${USER}" "$USER_DIR"
+chmod 700 "$USER_DIR"
 
 # Create empty authorized_keys with correct permissions
-touch "${SSH_BASE}/authorized_keys"
-chown "${USER}:${USER}" "${SSH_BASE}/authorized_keys"
-chmod 600 "${SSH_BASE}/authorized_keys"
+touch "${USER_DIR}/authorized_keys"
+chown "${USER}:${USER}" "${USER_DIR}/authorized_keys"
+chmod 600 "${USER_DIR}/authorized_keys"

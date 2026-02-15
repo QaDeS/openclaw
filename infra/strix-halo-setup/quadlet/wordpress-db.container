@@ -1,0 +1,18 @@
+[Unit]
+Description=MariaDB for WordPress
+After=hosting-net-network.service wordpress-db-data-volume.service
+PartOf=hosting.target
+
+[Container]
+Image=mariadb:lts
+ContainerName=wordpress_db
+Network=hosting-net.network
+Volume=wordpress-db-data.volume:/var/lib/mysql
+Environment=MARIADB_ROOT_PASSWORD=%WORDPRESS_DB_PASSWORD%
+Environment=MARIADB_DATABASE=wordpress
+Environment=MARIADB_USER=wordpress
+Environment=MARIADB_PASSWORD=%WORDPRESS_DB_PASSWORD%
+AutoUpdate=registry
+
+[Install]
+WantedBy=hosting.target

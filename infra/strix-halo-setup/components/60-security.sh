@@ -34,14 +34,18 @@ install_hosting_stack() {
 
     if [ "$DRY_RUN" = false ]; then
         log "Generating hosting secrets..."
-        local pg_pass
+        local pg_pass wp_db_pass
         pg_pass=$(openssl rand -hex 16)
+        wp_db_pass=$(openssl rand -hex 16)
 
         # Deploy quadlet files with password substitution
-        for qfile in hosting-net.network supabase-data.volume supabase.container wordpress.container; do
+        for qfile in hosting-net.network supabase-data.volume supabase.container \
+                     wordpress-db-data.volume wordpress-db.container wordpress.container; do
             local src="${INFRA_DIR}/quadlet/${qfile}"
             if [ -f "$src" ]; then
-                sed "s|%SUPABASE_DB_PASSWORD%|${pg_pass}|g" "$src" > "${quadlet_dir}/${qfile}"
+                sed -e "s|%SUPABASE_DB_PASSWORD%|${pg_pass}|g" \
+                    -e "s|%WORDPRESS_DB_PASSWORD%|${wp_db_pass}|g" \
+                    "$src" > "${quadlet_dir}/${qfile}"
                 track_file_create "${quadlet_dir}/${qfile}"
             fi
         done

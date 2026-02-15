@@ -16,7 +16,7 @@ harden_ssh() {
     # Audit key quality (warn on DSA, don't delete)
     if [ "$DRY_RUN" = false ]; then
         for user in $SSH_USERS ${SUDO_USER:-}; do
-            local keys_file="/etc/ssh/users/${user}/.ssh/authorized_keys"
+            local keys_file="/etc/ssh/users/${user}/authorized_keys"
             [ -f "$keys_file" ] || continue
             if grep -q "ssh-dss" "$keys_file" 2>/dev/null; then
                 warn "DSA key found for ${user} — consider upgrading to ed25519"
@@ -24,34 +24,10 @@ harden_ssh() {
         done
     fi
 
-    # Disable password auth only if at least 1 user in SSH_USERS has strong keys
-    local has_strong_keys=false
-    if [ "$DRY_RUN" = false ]; then
-        # Allow override via env var for testing (e.g., VM provisioning with single-user)
-        if [ "${FORCE_SSH_KEY_CHECK:-false}" = "true" ] || [ "${FORCE_DISABLE_PASSWORD_AUTH:-false}" = "true" ]; then
-            set_sshd_directive PasswordAuthentication "no"
-            log "Password authentication disabled (forced via FORCE_SSH_KEY_CHECK or FORCE_DISABLE_PASSWORD_AUTH)"
-            has_strong_keys=true
-        else
-            for user in $SSH_USERS ${SUDO_USER:-}; do
-                local keys_file="/etc/ssh/users/${user}/.ssh/authorized_keys"
-                [ -f "$keys_file" ] || continue
-                if grep -qE "ssh-(ed25519|rsa|ecdsa)" "$keys_file" 2>/dev/null; then
-                    has_strong_keys=true
-                    break
-                fi
-            done
-
-            if $has_strong_keys; then
-                set_sshd_directive PasswordAuthentication "no"
-                log "Password authentication disabled (strong keys found)"
-            else
-                warn "No strong SSH keys found — keeping password authentication enabled"
-            fi
-        fi
-    else
-        log "${YELLOW}[DRY-RUN] Will evaluate password auth based on key strength${NC}"
-    fi
+    # Keep password auth enabled — required for ecryptfs home directory unwrapping.
+    # AuthenticationMethods publickey,password ensures both factors are needed.
+    set_sshd_directive PasswordAuthentication "yes"
+    set_sshd_directive AuthenticationMethods "publickey,password"
 
     # Validate config before reload; revert on failure
     if [ "$DRY_RUN" = false ]; then

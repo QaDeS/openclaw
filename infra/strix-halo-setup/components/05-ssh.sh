@@ -10,8 +10,13 @@ setup_ssh_outside_home() {
     # Back up sshd_config (timestamped, idempotent within run)
     backup_file /etc/ssh/sshd_config
 
-    # Configure sshd to look in /etc/ssh/users/%u/.ssh/ first, with fallback
-    set_sshd_directive AuthorizedKeysFile "/etc/ssh/users/%u/.ssh/authorized_keys .ssh/authorized_keys"
+    # Configure sshd to look in /etc/ssh/users/%u/ (outside encrypted home)
+    set_sshd_directive AuthorizedKeysFile "/etc/ssh/users/%u/authorized_keys"
+
+    # Require both pubkey AND password — ecryptfs unwraps the home dir via
+    # pam_ecryptfs when the password is supplied, so no profile.d workaround needed.
+    set_sshd_directive AuthenticationMethods "publickey,password"
+    set_sshd_directive PasswordAuthentication "yes"
 
     # Enable SSH for the provisioning user + each user in SSH_USERS
     enable_ssh_for_user "${SUDO_USER:-}"
@@ -59,65 +64,4 @@ install_ssh_user_hook() {
     fi
 }
 
-deploy_ecryptfs_helpers() {
-    log "Deploying ecryptfs login/logout helpers..."
-
-    # Disable pam_ecryptfs.so for SSH so pubkey login works without a
-    # password. On Ubuntu 24.04, pam_ecryptfs isn't directly in
-    # /etc/pam.d/sshd — it's pulled in via @include common-auth and
-    # @include common-session-noninteractive. We patch all PAM files
-    # that reference pam_ecryptfs: the sshd file itself AND the common
-    # files it includes.
-    # The profile.d hook below handles mounting once the shell is ready.
-    local marker="# strix-skip-ecryptfs"
-    if [ "$DRY_RUN" = false ]; then
-        for pam_file in /etc/pam.d/sshd /etc/pam.d/common-auth /etc/pam.d/common-session /etc/pam.d/common-session-noninteractive; do
-            if [ -f "$pam_file" ] && grep -q "pam_ecryptfs" "$pam_file" && ! grep -q "$marker" "$pam_file"; then
-                backup_file "$pam_file"
-                sed -i "s/^\(.*pam_ecryptfs\.so.*\)$/${marker}\n# \\1/" "$pam_file"
-                log "Disabled pam_ecryptfs in $pam_file"
-            fi
-        done
-    else
-        log "${YELLOW}[DRY-RUN] Will disable pam_ecryptfs in sshd PAM config${NC}"
-    fi
-
-    # Auto-mount encrypted home on login
-    if [ "$DRY_RUN" = false ]; then
-        cat <<'PROFILE' | tee /etc/profile.d/ecryptfs-mount.sh >/dev/null
-# Auto-mount ecryptfs home if not already mounted
-if command -v ecryptfs-mount-private &>/dev/null; then
-    if [ ! -f "$HOME/.ecryptfs/auto-mount" ] || ! mount | grep -q "$HOME type ecryptfs"; then
-        ecryptfs-mount-private 2>/dev/null || true
-    fi
-fi
-PROFILE
-        chmod 644 /etc/profile.d/ecryptfs-mount.sh
-        track_file_create /etc/profile.d/ecryptfs-mount.sh
-    else
-        log "${YELLOW}[DRY-RUN] Will deploy /etc/profile.d/ecryptfs-mount.sh${NC}"
-    fi
-
-    # Auto-umount on last session (marker guard)
-    if [ "$DRY_RUN" = false ]; then
-        local logout_file="/etc/bash.bash_logout"
-        local marker="# strix-ecryptfs-umount"
-        if ! grep -q "$marker" "$logout_file" 2>/dev/null; then
-            track_append "$logout_file" "$marker"
-            cat <<LOGOUT | tee -a "$logout_file" >/dev/null
-$marker
-# Umount encrypted home on last session
-if command -v ecryptfs-umount-private &>/dev/null; then
-    # Only umount if this is the last session for this user
-    if [ "\$(who | grep -c "^\$USER ")" -le 1 ]; then
-        ecryptfs-umount-private 2>/dev/null || true
-    fi
-fi
-LOGOUT
-        fi
-    else
-        log "${YELLOW}[DRY-RUN] Will append ecryptfs umount to bash_logout${NC}"
-    fi
-}
-
-register_component "SSH_OUTSIDE_HOME" "setup_ssh_outside_home" "install_ssh_user_hook" "deploy_ecryptfs_helpers"
+register_component "SSH_OUTSIDE_HOME" "setup_ssh_outside_home" "install_ssh_user_hook"

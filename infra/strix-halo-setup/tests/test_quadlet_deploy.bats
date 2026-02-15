@@ -80,7 +80,19 @@ QUADLET_DIR="$STRIX_DIR/quadlet"
 }
 
 @test "quadlet: wordpress has password placeholder" {
-    grep -q '%SUPABASE_DB_PASSWORD%' "$QUADLET_DIR/wordpress.container"
+    grep -q '%WORDPRESS_DB_PASSWORD%' "$QUADLET_DIR/wordpress.container"
+}
+
+@test "quadlet: wordpress-db.container exists" {
+    [ -f "$QUADLET_DIR/wordpress-db.container" ]
+}
+
+@test "quadlet: wordpress-db uses mariadb image" {
+    grep -q 'Image=mariadb:lts' "$QUADLET_DIR/wordpress-db.container"
+}
+
+@test "quadlet: wordpress-db-data.volume exists" {
+    [ -f "$QUADLET_DIR/wordpress-db-data.volume" ]
 }
 
 @test "quadlet: openclaw uses host network" {

@@ -431,49 +431,37 @@ user_has_ssh() {
     [[ " ${SSH_USERS} ${SUDO_USER:-} " == *" ${user} "* ]]
 }
 
-# Enable SSH for a user by setting up /etc/ssh/users/<user>/.ssh/
+# Enable SSH for a user by setting up /etc/ssh/users/<user>/
+# Keys live at /etc/ssh/users/<user>/authorized_keys (flat, no .ssh subdir)
+# so they survive ecryptfs-encrypted home reboots.
 enable_ssh_for_user() {
     local user=$1
     user_has_ssh "$user" || return 0
 
-    local ssh_dir="/etc/ssh/users/${user}/.ssh"
+    local user_dir="/etc/ssh/users/${user}"
     local user_home
     user_home=$(getent passwd "$user" | cut -d: -f6)
 
-    run mkdir -p "$ssh_dir"
-    run chown "${user}:${user}" "/etc/ssh/users/${user}" "$ssh_dir"
-    run chmod 700 "/etc/ssh/users/${user}" "$ssh_dir"
+    run mkdir -p "$user_dir"
+    run chown "${user}:${user}" "$user_dir"
+    run chmod 700 "$user_dir"
 
     # Migrate existing authorized_keys (merge via sort -u, no data loss)
-    local target="${ssh_dir}/authorized_keys"
+    local target="${user_dir}/authorized_keys"
     if [ "$DRY_RUN" = false ]; then
         if [ -f "${user_home}/.ssh/authorized_keys" ] && [ ! -L "${user_home}/.ssh" ]; then
             if [ -f "$target" ]; then
-                # Merge existing keys
                 sort -u "${user_home}/.ssh/authorized_keys" "$target" > "${target}.tmp"
                 mv "${target}.tmp" "$target"
             else
                 cp -n "${user_home}/.ssh/authorized_keys" "$target"
             fi
         fi
+        touch "$target"
         chown "${user}:${user}" "$target" 2>/dev/null || true
         chmod 600 "$target" 2>/dev/null || true
     else
         log "${YELLOW}[DRY-RUN] Will migrate authorized_keys for ${user}${NC}"
-    fi
-
-    # Symlink ~/.ssh → /etc/ssh/users/<user>/.ssh
-    if [ "$DRY_RUN" = false ]; then
-        if [ -L "${user_home}/.ssh" ]; then
-            log "Symlink already exists: ${user_home}/.ssh"
-        elif [ -d "${user_home}/.ssh" ]; then
-            mv "${user_home}/.ssh" "${user_home}/.ssh.bak.$(date +%s)"
-            ln -sf "$ssh_dir" "${user_home}/.ssh"
-        else
-            ln -sf "$ssh_dir" "${user_home}/.ssh"
-        fi
-    else
-        log "${YELLOW}[DRY-RUN] Will symlink ${user_home}/.ssh → ${ssh_dir}${NC}"
     fi
 }
 
@@ -568,7 +556,7 @@ check_ssh_safety() {
     user_home=$(getent passwd "$SUDO_USER" | cut -d: -f6)
 
     # Check both the outside-home location and the traditional path (follow symlinks)
-    local outside_keys="/etc/ssh/users/${SUDO_USER}/.ssh/authorized_keys"
+    local outside_keys="/etc/ssh/users/${SUDO_USER}/authorized_keys"
     local home_keys="${user_home}/.ssh/authorized_keys"
 
     local found=false
@@ -593,7 +581,7 @@ confirm_execution() {
         warn "Running in DRY-RUN mode. No changes will be applied."
         warn "To apply changes, run with: sudo ./provision_strix_halo.sh --force"
     else
-        warn "CRITICAL: Modifying system files, kernel, and disabling SSH passwords."
+        warn "CRITICAL: Modifying system files and kernel configuration."
         # read -p "Type 'I UNDERSTAND THE RISKS' to proceed: " confirm
         # [[ "$confirm" != "I UNDERSTAND THE RISKS" ]] && error "Confirmation failed."
     fi

@@ -1,6 +1,6 @@
 [Unit]
 Description=Supabase PostgreSQL
-After=hosting-net.service supabase-data.service
+After=hosting-net-network.service supabase-data-volume.service
 PartOf=hosting.target
 
 [Container]

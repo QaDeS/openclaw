@@ -19,11 +19,11 @@ teardown() {
     [[ " ${COMPONENT_LIST[*]} " == *" SSH_OUTSIDE_HOME "* ]]
 }
 
-@test "ssh-outside-home: registers 3 functions" {
+@test "ssh-outside-home: registers 2 functions" {
     local funcs="${COMPONENT_FUNCS[SSH_OUTSIDE_HOME]}"
     local count
     count=$(echo "$funcs" | wc -w)
-    [ "$count" -eq 3 ]
+    [ "$count" -eq 2 ]
 }
 
 # --- Dry-run execution ---
@@ -40,28 +40,12 @@ teardown() {
     [ "$_status" -eq 0 ]
 }
 
-@test "ssh-outside-home: deploy_ecryptfs_helpers runs in dry-run without errors" {
-    DRY_RUN=true
-    capture deploy_ecryptfs_helpers
-    [ "$_status" -eq 0 ]
+@test "ssh-outside-home: configures AuthenticationMethods publickey,password" {
+    grep -q 'AuthenticationMethods.*publickey,password' "$STRIX_DIR/components/05-ssh.sh"
 }
 
-@test "ssh-outside-home: deploy_ecryptfs_helpers patches pam_ecryptfs out of PAM files" {
-    grep -q 'pam_ecryptfs' "$STRIX_DIR/components/05-ssh.sh"
-    grep -q '/etc/pam.d/sshd' "$STRIX_DIR/components/05-ssh.sh"
-    # Also patches common-auth and common-session (where Ubuntu 24.04 has pam_ecryptfs)
-    grep -q 'common-auth' "$STRIX_DIR/components/05-ssh.sh"
-    grep -q 'common-session' "$STRIX_DIR/components/05-ssh.sh"
-}
-
-@test "ssh-outside-home: deploy_ecryptfs_helpers skips PAM patch in dry-run" {
-    grep -q 'DRY-RUN.*Will disable pam_ecryptfs' "$STRIX_DIR/components/05-ssh.sh"
-}
-
-@test "ssh-outside-home: deploy_ecryptfs_helpers PAM patch is idempotent" {
-    # Marker guard prevents re-patching
-    grep -q 'strix-skip-ecryptfs' "$STRIX_DIR/components/05-ssh.sh"
-    grep -q '! grep -q "$marker"' "$STRIX_DIR/components/05-ssh.sh"
+@test "ssh-outside-home: keeps PasswordAuthentication enabled for ecryptfs" {
+    grep -q 'PasswordAuthentication.*yes' "$STRIX_DIR/components/05-ssh.sh"
 }
 
 # --- Content checks ---

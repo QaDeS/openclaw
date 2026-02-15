@@ -12,15 +12,30 @@ services:
     networks:
       - hosting_net
 
+  wordpress_db:
+    image: mariadb:lts
+    container_name: wordpress_db
+    environment:
+      MARIADB_ROOT_PASSWORD: ${WORDPRESS_DB_PASSWORD}
+      MARIADB_DATABASE: wordpress
+      MARIADB_USER: wordpress
+      MARIADB_PASSWORD: ${WORDPRESS_DB_PASSWORD}
+    volumes:
+      - wordpress_db_data:/var/lib/mysql
+    restart: unless-stopped
+    networks:
+      - hosting_net
+
   wordpress:
     image: wordpress:latest
     container_name: wordpress_multisite
     depends_on:
-      - supabase
+      - wordpress_db
     environment:
-      WORDPRESS_DB_HOST: supabase:5432
-      WORDPRESS_DB_USER: postgres
-      WORDPRESS_DB_PASSWORD: ${SUPABASE_DB_PASSWORD}
+      WORDPRESS_DB_HOST: wordpress_db
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: ${WORDPRESS_DB_PASSWORD}
+      WORDPRESS_DB_NAME: wordpress
       WORDPRESS_CONFIG_EXTRA: |
         define('MULTISITE', true);
         define('SUBDOMAIN_INSTALL', false);
@@ -40,3 +55,4 @@ networks:
 
 volumes:
   supabase_data:
+  wordpress_db_data:

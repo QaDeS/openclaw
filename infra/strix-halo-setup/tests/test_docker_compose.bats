@@ -29,6 +29,8 @@ QUADLET_DIR="$STRIX_DIR/quadlet"
     [ -f "$QUADLET_DIR/hosting-net.network" ]
     [ -f "$QUADLET_DIR/supabase-data.volume" ]
     [ -f "$QUADLET_DIR/supabase.container" ]
+    [ -f "$QUADLET_DIR/wordpress-db-data.volume" ]
+    [ -f "$QUADLET_DIR/wordpress-db.container" ]
     [ -f "$QUADLET_DIR/wordpress.container" ]
 }
 

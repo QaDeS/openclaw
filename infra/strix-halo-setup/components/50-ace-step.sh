@@ -64,11 +64,15 @@ install_ace_step() {
             #    otherwise fall back to the standard requirements minus torch.
             if [ -f "${ACE_STEP_HOME}/requirements-rocm-linux.txt" ]; then
                 sudo -u comfyui "$PIP" install -r "${ACE_STEP_HOME}/requirements-rocm-linux.txt"
+                # Guard against diffusers 0.33.0+ logger bug in torchao_quantizer.py
+                sudo -u comfyui "$PIP" install "diffusers>=0.31.0,<0.33.0"
             else
                 log "No requirements-rocm-linux.txt found, installing core deps manually..."
+                # Pin diffusers<0.33.0: 0.33.0+ has a NameError bug in
+                # torchao_quantizer.py (logger undefined).
                 sudo -u comfyui "$PIP" install \
                     "transformers>=4.51.0,<4.58.0" \
-                    "diffusers" \
+                    "diffusers>=0.31.0,<0.33.0" \
                     "accelerate>=1.12.0" \
                     "gradio==6.2.0" \
                     "fastapi>=0.110.0" \
