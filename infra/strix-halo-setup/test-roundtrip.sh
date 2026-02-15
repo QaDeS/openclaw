@@ -105,6 +105,16 @@ chmod 440 /etc/sudoers.d/testuser
 mkdir -p /etc/ssh/users/testuser
 echo "ssh-ed25519 AAAA_fake_key testuser@host" > /etc/ssh/users/testuser/authorized_keys
 
+# mail spool
+mkdir -p /var/mail
+echo "From root@localhost" > /var/mail/testuser
+chown 1500:mail /var/mail/testuser 2>/dev/null || chown 1500:root /var/mail/testuser
+chmod 660 /var/mail/testuser
+
+# linger (create the file since loginctl may not work in container)
+mkdir -p /var/lib/systemd/linger
+touch /var/lib/systemd/linger/testuser
+
 # home directory content
 mkdir -p /home/testuser/.config/containers/systemd
 echo "important data" > /home/testuser/myfile.txt
@@ -129,6 +139,8 @@ grep -q "testuser" /etc/subuid && pass "subuid entry exists" || fail "subuid mis
 grep -q "testuser" /etc/subgid && pass "subgid entry exists" || fail "subgid missing"
 groups testuser 2>/dev/null | grep -q "extragroup" && pass "supplementary group extragroup" || fail "supplementary group extragroup missing"
 groups testuser 2>/dev/null | grep -q "devteam" && pass "supplementary group devteam" || fail "supplementary group devteam missing"
+[[ -f /var/mail/testuser ]] && pass "mail spool exists" || fail "mail spool missing"
+[[ -f /var/lib/systemd/linger/testuser ]] && pass "linger file exists" || fail "linger file missing"
 grep -c "testuser" /home/otheruser/.ssh/authorized_keys | grep -q "1" && pass "testuser key in otheruser authorized_keys" || fail "otheruser authorized_keys setup wrong"
 
 # capture shadow hash for later comparison
@@ -148,6 +160,7 @@ echo "=== Phase 2 checks ==="
 ! grep -q "^testuser:" /etc/subgid 2>/dev/null && pass "subgid entry removed" || fail "subgid still present"
 ! [[ -d /etc/ssh/users/testuser ]] && pass "SSH server keys removed" || fail "SSH keys still present"
 ! grep -qi "testuser" /home/otheruser/.ssh/authorized_keys 2>/dev/null && pass "testuser key revoked from otheruser" || fail "testuser key still in otheruser authorized_keys"
+! [[ -f /var/lib/systemd/linger/testuser ]] && pass "linger disabled" || fail "linger still enabled"
 
 # find the backup tarball
 TARBALL=$(ls -t /var/backups/removed-users/testuser_*.tar.gz 2>/dev/null | head -1)
@@ -177,6 +190,7 @@ grep -q "^shadow_hash=" "$MANIFEST" && pass "manifest: shadow_hash field present
 SAVED_HASH=$(grep "^shadow_hash=" "$MANIFEST" | cut -d= -f2-)
 [[ -n "$SAVED_HASH" ]] && pass "manifest: shadow hash is non-empty" || fail "manifest: shadow hash is empty"
 [[ "$SAVED_HASH" == "$ORIG_SHADOW" ]] && pass "manifest: shadow hash matches original" || fail "manifest: shadow hash mismatch"
+grep -q "^linger=true$" "$MANIFEST" && pass "manifest: linger=true" || fail "manifest: linger missing or wrong"
 grep -q "^revoked_ssh_keys=" "$MANIFEST" && pass "manifest: revoked_ssh_keys field present" || fail "manifest: revoked_ssh_keys missing"
 # verify revoked keys is non-empty (--revoke-ssh was used and otheruser had the key)
 RSK=$(grep "^revoked_ssh_keys=" "$MANIFEST" | cut -d= -f2-)
@@ -253,6 +267,12 @@ groups testuser 2>/dev/null | grep -q "devteam" && pass "supplementary group dev
 # password hash
 RESTORED_SHADOW=$(getent shadow testuser | cut -d: -f2)
 [[ "$RESTORED_SHADOW" == "$ORIG_SHADOW" ]] && pass "password hash restored" || fail "password hash mismatch (got: $RESTORED_SHADOW)"
+
+# mail spool
+[[ -f /var/mail/testuser ]] && pass "mail spool restored" || fail "mail spool not restored"
+
+# linger (loginctl may not work in container, check file directly)
+[[ -f /var/lib/systemd/linger/testuser ]] && pass "linger restored" || fail "linger not restored"
 
 # revoked SSH keys restored to otheruser
 grep -q "testuser" /home/otheruser/.ssh/authorized_keys 2>/dev/null && pass "revoked SSH key re-added to otheruser" || fail "revoked SSH key not re-added"

@@ -124,8 +124,8 @@ read_manifest() {
     local file="$1"
     M_USERNAME="" M_UID="" M_GID="" M_GROUP="" M_SHELL="" M_GECOS=""
     M_HOME="" M_KEEP_KEYS="" M_SUBUID="" M_SUBGID="" M_REMOVED_AT=""
-    M_SUPPLEMENTARY_GROUPS="" M_SHADOW_HASH="" M_REVOKED_SSH_KEYS=""
-    M_VERSION=""
+    M_SUPPLEMENTARY_GROUPS="" M_SHADOW_HASH="" M_LINGER=""
+    M_REVOKED_SSH_KEYS="" M_VERSION=""
 
     while IFS= read -r line; do
         # skip blank lines
@@ -155,6 +155,7 @@ read_manifest() {
             removed_at)            M_REMOVED_AT="$value" ;;
             supplementary_groups)  M_SUPPLEMENTARY_GROUPS="$value" ;;
             shadow_hash)           M_SHADOW_HASH="$value" ;;
+            linger)                M_LINGER="$value" ;;
             revoked_ssh_keys)      M_REVOKED_SSH_KEYS="$value" ;;
         esac
     done < "$file"

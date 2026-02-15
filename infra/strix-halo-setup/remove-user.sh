@@ -327,6 +327,8 @@ if $BACKUP_HOME; then
         "/etc/ssh/users/$TARGET_USER" \
         "/var/lib/AccountsService/users/$TARGET_USER" \
         "/var/lib/AccountsService/icons/$TARGET_USER" \
+        "/var/mail/$TARGET_USER" \
+        "/var/spool/mail/$TARGET_USER" \
     ; do
         if [[ -e "$p" ]]; then
             echo "${p#/}" >> "$backup_list"
@@ -369,6 +371,11 @@ if $BACKUP_HOME; then
             _shadow_hash=$(getent shadow "$TARGET_USER" 2>/dev/null | cut -d: -f2 || true)
         fi
 
+        _linger="false"
+        if [[ -f "/var/lib/systemd/linger/$TARGET_USER" ]]; then
+            _linger="true"
+        fi
+
         cat > "$manifest_tmp" <<MANIFEST
 # remove-user manifest v1
 username=$TARGET_USER
@@ -383,6 +390,7 @@ subuid=$_sub_uid
 subgid=$_sub_gid
 supplementary_groups=$SUPP_GROUPS
 shadow_hash=$_shadow_hash
+linger=$_linger
 revoked_ssh_keys=$_revoked_keys_list
 removed_at=$(date -Iseconds)
 MANIFEST
@@ -513,7 +521,13 @@ else
 fi
 
 if [[ -f "/var/lib/systemd/linger/$TARGET_USER" ]]; then
-    run loginctl disable-linger "$TARGET_USER"
+    log_action "disable linger for $TARGET_USER"
+    if $FORCE; then
+        if ! loginctl disable-linger "$TARGET_USER" 2>/dev/null; then
+            # fallback: remove the linger file directly (works without systemd)
+            rm -f "/var/lib/systemd/linger/$TARGET_USER"
+        fi
+    fi
 else
     log_skip "lingering not enabled"
 fi

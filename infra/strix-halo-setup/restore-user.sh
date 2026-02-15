@@ -64,9 +64,11 @@ Steps (in order):
   9. Restore sudoers fragment (if present)
   10. Restore SSH server keys (if present)
   11. Restore AccountsService files (if present)
-  12. Restore subuid/subgid entries (from manifest)
-  13. Restore revoked SSH keys (if --restore-ssh-keys)
-  14. Summary and next steps
+  12. Restore mail spool (if present)
+  13. Restore subuid/subgid entries (from manifest)
+  14. Restore linger state (if enabled)
+  15. Restore revoked SSH keys (if --restore-ssh-keys)
+  16. Summary and next steps
 
 Exit codes:
   0   Clean restore (or dry run)
@@ -134,7 +136,8 @@ if $LIST_MODE; then
     for tarball in "$LIST_DIR"/*.tar.gz; do
         [[ -f "$tarball" ]] || continue
         # extract manifest to a temp location
-        mpath=$(tar tzf "$tarball" 2>/dev/null | grep '\.manifest-' | head -1 || true)
+        _listing=$(tar tzf "$tarball" 2>/dev/null || true)
+        mpath=$(echo "$_listing" | grep '\.manifest-' | head -1 || true)
         [[ -n "$mpath" ]] || continue
 
         tmp_manifest=$(mktemp)
@@ -174,6 +177,10 @@ if [[ -n "$LOG_FILE" ]]; then
     _log_raw "---"
 fi
 
+# cache tarball listing once (avoids pipefail+SIGPIPE issues from
+# repeated tar tzf | grep -q under set -o pipefail)
+TAR_LISTING=$(tar tzf "$ARCHIVE" 2>/dev/null || true)
+
 # ── 1. Extract and read manifest ───────────────────────────────────
 
 step "Extract manifest from tarball"
@@ -182,7 +189,7 @@ manifest_tmp=$(mktemp)
 trap 'rm -f "$manifest_tmp"' EXIT
 
 # find the manifest path inside the tarball
-manifest_path=$(tar tzf "$ARCHIVE" 2>/dev/null | grep '\.manifest-' | head -1 || true)
+manifest_path=$(echo "$TAR_LISTING" | grep '\.manifest-' | head -1 || true)
 if [[ -z "$manifest_path" ]]; then
     die "no manifest found in tarball (was it created by remove-user.sh v2+?)"
 fi
@@ -215,6 +222,9 @@ if [[ -n "$M_SUPPLEMENTARY_GROUPS" ]]; then
 fi
 if [[ -n "$M_SHADOW_HASH" ]]; then
     _echo "    shadow hash: ${CYAN}(saved)${RESET}"
+fi
+if [[ "$M_LINGER" == "true" ]]; then
+    _echo "    linger: ${BOLD}enabled${RESET}"
 fi
 if [[ -n "$M_REVOKED_SSH_KEYS" ]]; then
     # count pipe-separated entries
@@ -338,7 +348,7 @@ fi
 
 step "Extract home directory from tarball"
 home_rel="${M_HOME#/}"
-if tar tzf "$ARCHIVE" 2>/dev/null | grep -q "^${home_rel}"; then
+if echo "$TAR_LISTING" | grep -q "^${home_rel}"; then
     log_action "tar xzf $ARCHIVE -C / (home: $home_rel)"
     if $FORCE; then
         tar xzf "$ARCHIVE" -C / "$home_rel" 2>/dev/null || true
@@ -353,7 +363,7 @@ fi
 step "Restore crontab"
 cron_restored=false
 for cron_path in "var/spool/cron/crontabs/$M_USERNAME" "var/spool/cron/$M_USERNAME"; do
-    if tar tzf "$ARCHIVE" 2>/dev/null | grep -q "^${cron_path}$"; then
+    if echo "$TAR_LISTING" | grep -q "^${cron_path}$"; then
         log_action "extract $cron_path"
         if $FORCE; then
             tar xzf "$ARCHIVE" -C / "$cron_path" 2>/dev/null || true
@@ -370,7 +380,7 @@ if ! $cron_restored; then log_skip "no crontab in tarball"; fi
 
 step "Restore sudoers fragment"
 sudoers_path="etc/sudoers.d/$M_USERNAME"
-if tar tzf "$ARCHIVE" 2>/dev/null | grep -q "^${sudoers_path}$"; then
+if echo "$TAR_LISTING" | grep -q "^${sudoers_path}$"; then
     log_action "extract $sudoers_path"
     if $FORCE; then
         tar xzf "$ARCHIVE" -C / "$sudoers_path" 2>/dev/null || true
@@ -385,7 +395,7 @@ fi
 
 step "Restore SSH server keys"
 ssh_path="etc/ssh/users/$M_USERNAME"
-if tar tzf "$ARCHIVE" 2>/dev/null | grep -q "^${ssh_path}"; then
+if echo "$TAR_LISTING" | grep -q "^${ssh_path}"; then
     log_action "extract $ssh_path"
     if $FORCE; then
         tar xzf "$ARCHIVE" -C / "$ssh_path" 2>/dev/null || true
@@ -400,7 +410,7 @@ step "Restore AccountsService files"
 acct_restored=false
 for acct_path in "var/lib/AccountsService/users/$M_USERNAME" \
                  "var/lib/AccountsService/icons/$M_USERNAME"; do
-    if tar tzf "$ARCHIVE" 2>/dev/null | grep -q "^${acct_path}$"; then
+    if echo "$TAR_LISTING" | grep -q "^${acct_path}$"; then
         log_action "extract $acct_path"
         if $FORCE; then
             tar xzf "$ARCHIVE" -C / "$acct_path" 2>/dev/null || true
@@ -410,7 +420,25 @@ for acct_path in "var/lib/AccountsService/users/$M_USERNAME" \
 done
 if ! $acct_restored; then log_skip "no AccountsService data in tarball"; fi
 
-# ── 12. Restore subuid/subgid entries ─────────────────────────────
+# ── 12. Restore mail spool ─────────────────────────────────────────
+
+step "Restore mail spool"
+mail_restored=false
+for mail_path in "var/mail/$M_USERNAME" "var/spool/mail/$M_USERNAME"; do
+    if echo "$TAR_LISTING" | grep -q "^${mail_path}$"; then
+        log_action "extract $mail_path"
+        if $FORCE; then
+            tar xzf "$ARCHIVE" -C / "$mail_path" 2>/dev/null || true
+            chown "$M_UID:mail" "/$mail_path" 2>/dev/null || true
+            chmod 660 "/$mail_path" 2>/dev/null || true
+        fi
+        mail_restored=true
+        break
+    fi
+done
+if ! $mail_restored; then log_skip "no mail spool in tarball"; fi
+
+# ── 13. Restore subuid/subgid entries ────────────────────────────
 
 step "Restore subuid/subgid entries"
 if [[ -n "$M_SUBUID" ]]; then
@@ -430,7 +458,25 @@ else
     log_skip "no subgid range in manifest"
 fi
 
-# ── 13. Restore revoked SSH keys ──────────────────────────────────
+# ── 14. Restore linger state ──────────────────────────────────────
+
+step "Restore linger state"
+if [[ "$M_LINGER" == "true" ]]; then
+    log_action "enable linger for $M_USERNAME"
+    if $FORCE; then
+        if command -v loginctl &>/dev/null && loginctl enable-linger "$M_USERNAME" 2>/dev/null; then
+            : # loginctl succeeded
+        else
+            # fallback: create the linger file directly (works without systemd running)
+            mkdir -p /var/lib/systemd/linger
+            touch "/var/lib/systemd/linger/$M_USERNAME"
+        fi
+    fi
+else
+    log_skip "linger was not enabled"
+fi
+
+# ── 15. Restore revoked SSH keys ──────────────────────────────────
 
 step "Restore revoked SSH keys"
 if [[ -n "$M_REVOKED_SSH_KEYS" ]] && $RESTORE_SSH_KEYS; then
@@ -465,7 +511,7 @@ else
     log_skip "no revoked SSH keys in manifest"
 fi
 
-# ── 14. Summary ─────────────────────────────────────────────────────
+# ── 16. Summary ─────────────────────────────────────────────────────
 
 _echo ""
 if $FORCE; then
