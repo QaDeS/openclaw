@@ -332,6 +332,7 @@ if $BACKUP_HOME; then
     ; do
         if [[ -e "$p" ]]; then
             echo "${p#/}" >> "$backup_list"
+            log_info "backup: $p"
         fi
     done
 
@@ -354,28 +355,39 @@ if $BACKUP_HOME; then
         done < /etc/passwd
     fi
 
-    # write metadata manifest
+    # gather manifest metadata (needed for both dry-run display and actual write)
+    _sub_uid=""
+    _sub_gid=""
+    if [[ -f /etc/subuid ]]; then
+        _sub_uid=$(grep "^${TARGET_USER}:" /etc/subuid 2>/dev/null | head -1 | cut -d: -f2-3 || true)
+    fi
+    if [[ -f /etc/subgid ]]; then
+        _sub_gid=$(grep "^${TARGET_USER}:" /etc/subgid 2>/dev/null | head -1 | cut -d: -f2-3 || true)
+    fi
+
+    _shadow_hash=""
+    if $SAVE_SHADOW && [[ -f /etc/shadow ]]; then
+        _shadow_hash=$(getent shadow "$TARGET_USER" 2>/dev/null | cut -d: -f2 || true)
+    fi
+
+    _linger="false"
+    if [[ -f "/var/lib/systemd/linger/$TARGET_USER" ]]; then
+        _linger="true"
+    fi
+
+    # show manifest metadata
     log_action "write metadata manifest for restore"
+    log_info "manifest: user=$TARGET_USER uid=$UID_NUM gid=$GID_NUM group=$GROUP_NAME"
+    log_info "manifest: shell=$USER_SHELL home=$HOME_DIR"
+    [[ -z "$USER_GECOS" ]]  || log_info "manifest: gecos=$USER_GECOS"
+    [[ -z "$SUPP_GROUPS" ]] || log_info "manifest: supplementary_groups=$SUPP_GROUPS"
+    [[ -z "$_sub_uid" ]]    || log_info "manifest: subuid=$_sub_uid"
+    [[ -z "$_sub_gid" ]]    || log_info "manifest: subgid=$_sub_gid"
+    [[ -z "$_shadow_hash" ]]|| log_info "manifest: shadow_hash=(saved)"
+    [[ "$_linger" != "true" ]] || log_info "manifest: linger=true"
+    [[ -z "$_revoked_keys_list" ]] || log_info "manifest: revoked_ssh_keys=($(echo "$_revoked_keys_list" | tr '|' '\n' | wc -l) entries)"
+
     if $FORCE; then
-        _sub_uid=""
-        _sub_gid=""
-        if [[ -f /etc/subuid ]]; then
-            _sub_uid=$(grep "^${TARGET_USER}:" /etc/subuid 2>/dev/null | head -1 | cut -d: -f2-3 || true)
-        fi
-        if [[ -f /etc/subgid ]]; then
-            _sub_gid=$(grep "^${TARGET_USER}:" /etc/subgid 2>/dev/null | head -1 | cut -d: -f2-3 || true)
-        fi
-
-        _shadow_hash=""
-        if $SAVE_SHADOW && [[ -f /etc/shadow ]]; then
-            _shadow_hash=$(getent shadow "$TARGET_USER" 2>/dev/null | cut -d: -f2 || true)
-        fi
-
-        _linger="false"
-        if [[ -f "/var/lib/systemd/linger/$TARGET_USER" ]]; then
-            _linger="true"
-        fi
-
         cat > "$manifest_tmp" <<MANIFEST
 # remove-user manifest v1
 username=$TARGET_USER
