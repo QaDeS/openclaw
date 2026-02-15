@@ -763,30 +763,74 @@ step "Orphaned files owned by uid $UID_NUM"
 if $SKIP_ORPHAN_SCAN; then
     log_skip "skipped — --skip-orphan-scan was set"
 else
-    # build exclusion list (always exclude /proc, /sys; add SSH keys dir when --keep-keys)
-    _find_excludes=( -not -path "/proc/*" -not -path "/sys/*" )
+    # build exclusion list for --keep-keys
+    _keep_keys_excludes=()
     if $KEEP_KEYS && [[ -d "$ssh_user_dir" ]]; then
-        _find_excludes+=( -not -path "${ssh_user_dir}/*" -not -path "$ssh_user_dir" )
+        _keep_keys_excludes=( -not -path "${ssh_user_dir}/*" -not -path "$ssh_user_dir" )
     fi
 
-    orphans=$(find / -xdev -uid "$UID_NUM" \
-        "${_find_excludes[@]}" \
-        2>/dev/null || true)
-    if [[ -n "$orphans" ]]; then
-        count=$(echo "$orphans" | wc -l)
-        # collapse to unique parent directories, show up to 20
-        _orphan_dirs=$(echo "$orphans" | xargs -I{} dirname {} | sort -u | head -20)
-        _dir_count=$(echo "$_orphan_dirs" | wc -l)
-        _dir_summary=$(echo "$_orphan_dirs" | paste -sd, | sed 's/,/, /g')
-        if [[ "$_dir_count" -ge 20 ]]; then
+    # probe top-level dirs for orphaned files (bail on first hit per dir)
+    # this avoids enumerating potentially hundreds of thousands of files
+    _skip_dirs="/proc /sys /dev /run"
+    _orphan_dirs=()
+    for _tld in /*/; do
+        [[ -d "$_tld" ]] || continue
+        _tld="${_tld%/}"
+        # skip virtual/volatile filesystems
+        case " $_skip_dirs " in *" $_tld "*) continue ;; esac
+        # skip kept SSH keys dir
+        if $KEEP_KEYS && [[ "$_tld" == "${ssh_user_dir%/*}" ]]; then
+            if [[ ${#_keep_keys_excludes[@]} -gt 0 ]]; then
+                _hit=$(find "$_tld" -xdev -uid "$UID_NUM" "${_keep_keys_excludes[@]}" -print -quit 2>/dev/null || true)
+            else
+                _hit=$(find "$_tld" -xdev -uid "$UID_NUM" -print -quit 2>/dev/null || true)
+            fi
+        else
+            _hit=$(find "$_tld" -xdev -uid "$UID_NUM" -print -quit 2>/dev/null || true)
+        fi
+        [[ -n "$_hit" ]] && _orphan_dirs+=("$_tld")
+    done
+
+    if [[ ${#_orphan_dirs[@]} -gt 0 ]]; then
+        # drill one level deeper inside each hit to narrow down
+        _detail_dirs=()
+        for _od in "${_orphan_dirs[@]}"; do
+            # check immediate children; if too many top-levels, just keep the parent
+            _children=()
+            for _child in "$_od"/*/; do
+                [[ -d "$_child" ]] || continue
+                _child="${_child%/}"
+                if $KEEP_KEYS && [[ ${#_keep_keys_excludes[@]} -gt 0 ]]; then
+                    _chit=$(find "$_child" -xdev -uid "$UID_NUM" "${_keep_keys_excludes[@]}" -print -quit 2>/dev/null || true)
+                else
+                    _chit=$(find "$_child" -xdev -uid "$UID_NUM" -print -quit 2>/dev/null || true)
+                fi
+                [[ -n "$_chit" ]] && _children+=("$_child")
+                # cap drill-down per top-level dir
+                [[ ${#_children[@]} -ge 5 ]] && break
+            done
+            if [[ ${#_children[@]} -gt 0 && ${#_children[@]} -lt 5 ]]; then
+                _detail_dirs+=("${_children[@]}")
+            else
+                _detail_dirs+=("$_od")
+            fi
+            # cap total reported dirs
+            [[ ${#_detail_dirs[@]} -ge 20 ]] && break
+        done
+
+        _dir_summary=$(printf '%s, ' "${_detail_dirs[@]}")
+        _dir_summary="${_dir_summary%, }"
+        if [[ ${#_detail_dirs[@]} -ge 20 ]]; then
             _dir_summary+=", ..."
         fi
-        log_info "${count} orphaned file(s) in ${_dir_count} dir(s): ${_dir_summary}"
+        log_info "orphaned files in ${#_detail_dirs[@]} location(s): ${_dir_summary}"
+
         if $NUKE_ORPHANS; then
             log_action "delete all files owned by uid $UID_NUM"
             if $FORCE; then
                 find / -xdev -uid "$UID_NUM" \
-                    "${_find_excludes[@]}" \
+                    -not -path "/proc/*" -not -path "/sys/*" \
+                    "${_keep_keys_excludes[@]+"${_keep_keys_excludes[@]}"}" \
                     -delete 2>/dev/null || true
             fi
         else
