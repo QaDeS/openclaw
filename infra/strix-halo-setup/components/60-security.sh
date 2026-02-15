@@ -27,6 +27,21 @@ install_hosting_stack() {
     log "Installing Web Hosting Stack (Supabase + WordPress) via Podman Quadlet..."
     ensure_user hosting
 
+    # Ensure home is /home/hosting — the quadlet generator resolves
+    # $HOME from passwd, so a wrong home means no generated units.
+    local hosting_home
+    hosting_home=$(getent passwd hosting | cut -d: -f6)
+    if [ "$hosting_home" != "/home/hosting" ] && [ "$DRY_RUN" = false ]; then
+        log "Fixing hosting home: ${hosting_home} → /home/hosting"
+        usermod -d /home/hosting hosting
+        mkdir -p /home/hosting
+        chown hosting:hosting /home/hosting
+        if [ -d "${hosting_home}/.config" ]; then
+            rsync -a "${hosting_home}/.config/" /home/hosting/.config/
+        fi
+        chown -R hosting:hosting /home/hosting
+    fi
+
     # Deploy quadlet + target files for rootless podman
     local quadlet_dir="/home/hosting/.config/containers/systemd"
     local systemd_dir="/home/hosting/.config/systemd/user"

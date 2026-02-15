@@ -17,6 +17,26 @@ install_ddns() {
         run useradd -m -d /home/ddns -s /bin/bash ddns
     fi
 
+    # Ensure home is /home/ddns — the quadlet generator resolves
+    # $HOME from passwd, so a wrong home means no generated units.
+    local ddns_home
+    ddns_home=$(getent passwd ddns | cut -d: -f6)
+    if [ "$ddns_home" != "/home/ddns" ] && [ "$DRY_RUN" = false ]; then
+        log "Fixing ddns home: ${ddns_home} → /home/ddns"
+        usermod -d /home/ddns ddns
+        mkdir -p /home/ddns
+        chown ddns:ddns /home/ddns
+        # Migrate any existing config/secrets from old home
+        if [ -d "${ddns_home}/.config" ]; then
+            rsync -a "${ddns_home}/.config/" /home/ddns/.config/
+        fi
+        if [ -d "${ddns_home}/.secrets" ]; then
+            rsync -a "${ddns_home}/.secrets/" /home/ddns/.secrets/
+        fi
+        chown -R ddns:ddns /home/ddns
+        ddns_home="/home/ddns"
+    fi
+
     # Create secrets directory
     run mkdir -p /home/ddns/.secrets
     run chmod 700 /home/ddns/.secrets
