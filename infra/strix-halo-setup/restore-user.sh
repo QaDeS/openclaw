@@ -349,20 +349,15 @@ fi
 step "Extract home directory from tarball"
 home_rel="${M_HOME#/}"
 if echo "$TAR_LISTING" | grep -q "^${home_rel}"; then
-    # show top-level contents that would be restored
     _home_entries=$(echo "$TAR_LISTING" | grep "^${home_rel}" || true)
-    _home_dirs=$(echo "$_home_entries" | sed "s|^${home_rel}/||" | cut -d/ -f1 | sort -u | head -15)
     _home_total=$(echo "$_home_entries" | wc -l)
-    log_action "extract $home_rel/ ($_home_total entries)"
+    # build a comma-separated list of top-level items inside home
+    _home_dirs=$(echo "$_home_entries" | sed "s|^${home_rel}/||" | cut -d/ -f1 | sort -u | grep -v '^$' || true)
+    _home_summary=""
     if [[ -n "$_home_dirs" ]]; then
-        while read -r _d; do
-            [[ -n "$_d" ]] && log_info "  $M_HOME/$_d"
-        done <<< "$_home_dirs"
-        _dir_count=$(echo "$_home_dirs" | wc -l)
-        if [[ "$_dir_count" -ge 15 ]]; then
-            log_info "  (showing first 15 top-level entries)"
-        fi
+        _home_summary=" — $(echo "$_home_dirs" | sed "s|^|$M_HOME/|" | paste -sd, | sed 's/,/, /g')"
     fi
+    log_action "extract $M_HOME/ ($_home_total entries)${_home_summary}"
     if $FORCE; then
         tar xzf "$ARCHIVE" -C / "$home_rel" 2>/dev/null || true
         chown -R "$M_UID:$M_GID" "$M_HOME"

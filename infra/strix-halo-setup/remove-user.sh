@@ -412,7 +412,9 @@ MANIFEST
     # create tarball immediately (before any destructive steps)
     entry_count=$(wc -l < "$backup_list")
     if [[ "$entry_count" -gt 0 ]]; then
-        log_action "tar czf $archive (${entry_count} path(s) from /)"
+        # build a comma-separated summary of the backed-up root paths
+        _backup_summary=$(sed 's|^|/|' "$backup_list" | paste -sd, | sed 's/,/, /g')
+        log_action "tar czf $archive — ${_backup_summary}"
         if $FORCE; then
             if tar czf "$archive" -C / -T "$backup_list" 2>/dev/null; then
                 chmod 600 "$archive"
@@ -769,15 +771,11 @@ else
 
     orphans=$(find / -xdev -uid "$UID_NUM" \
         "${_find_excludes[@]}" \
-        2>/dev/null | head -20 || true)
+        2>/dev/null || true)
     if [[ -n "$orphans" ]]; then
-        while read -r f; do
-            log_info "$f"
-        done <<< "$orphans"
+        _orphan_summary=$(echo "$orphans" | paste -sd, | sed 's/,/, /g')
         count=$(echo "$orphans" | wc -l)
-        if [[ "$count" -ge 20 ]]; then
-            log_info "(showing first 20 — there may be more)"
-        fi
+        log_info "${count} orphaned file(s): ${_orphan_summary}"
         if $NUKE_ORPHANS; then
             log_action "delete all files owned by uid $UID_NUM"
             if $FORCE; then
