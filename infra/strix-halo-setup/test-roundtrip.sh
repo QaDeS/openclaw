@@ -129,6 +129,18 @@ echo "ssh-ed25519 AAAA_other_key otheruser@host" > /home/otheruser/.ssh/authoriz
 echo "ssh-ed25519 AAAA_fake_key testuser@host" >> /home/otheruser/.ssh/authorized_keys
 chown -R 1600:1600 /home/otheruser
 
+# spawn background processes as testuser (exercises process kill + retry loop)
+runuser -u testuser -- sleep 999 &
+SLEEP_PID1=$!
+runuser -u testuser -- sleep 999 &
+SLEEP_PID2=$!
+# give them a moment to start
+sleep 0.2
+
+# temp files in /tmp owned by testuser
+touch /tmp/testuser-stray-1.tmp /tmp/testuser-stray-2.tmp
+chown 1500:1500 /tmp/testuser-stray-1.tmp /tmp/testuser-stray-2.tmp
+
 echo ""
 echo "=== Phase 1 checks ==="
 id testuser &>/dev/null && pass "user testuser exists" || fail "user testuser missing"
@@ -142,6 +154,9 @@ groups testuser 2>/dev/null | grep -q "devteam" && pass "supplementary group dev
 [[ -f /var/mail/testuser ]] && pass "mail spool exists" || fail "mail spool missing"
 [[ -f /var/lib/systemd/linger/testuser ]] && pass "linger file exists" || fail "linger file missing"
 grep -c "testuser" /home/otheruser/.ssh/authorized_keys | grep -q "1" && pass "testuser key in otheruser authorized_keys" || fail "otheruser authorized_keys setup wrong"
+PROC_COUNT=$(ps -u 1500 --no-headers 2>/dev/null | wc -l) || true
+[[ "$PROC_COUNT" -ge 2 ]] && pass "background processes running ($PROC_COUNT)" || fail "expected >=2 processes, got $PROC_COUNT"
+[[ -f /tmp/testuser-stray-1.tmp ]] && pass "temp file exists" || fail "temp file missing"
 
 # capture shadow hash for later comparison
 ORIG_SHADOW=$(getent shadow testuser | cut -d: -f2)
@@ -161,6 +176,11 @@ echo "=== Phase 2 checks ==="
 ! [[ -d /etc/ssh/users/testuser ]] && pass "SSH server keys removed" || fail "SSH keys still present"
 ! grep -qi "testuser" /home/otheruser/.ssh/authorized_keys 2>/dev/null && pass "testuser key revoked from otheruser" || fail "testuser key still in otheruser authorized_keys"
 ! [[ -f /var/lib/systemd/linger/testuser ]] && pass "linger disabled" || fail "linger still enabled"
+# processes killed
+REMAINING=$(ps -u 1500 --no-headers 2>/dev/null | wc -l) || true
+[[ "$REMAINING" -eq 0 ]] && pass "all processes killed" || fail "$REMAINING processes still running"
+# temp files cleaned
+! [[ -f /tmp/testuser-stray-1.tmp ]] && pass "temp files cleaned" || fail "temp files still exist"
 
 # find the backup tarball
 TARBALL=$(ls -t /var/backups/removed-users/testuser_*.tar.gz 2>/dev/null | head -1)
@@ -233,6 +253,53 @@ chown -R 1800:1800 /opt/keepuser-stray
 ! [[ -d /opt/keepuser-stray ]] && pass "--nuke-orphans deleted stray files" || fail "--nuke-orphans left stray files"
 # clean up
 rm -rf /etc/ssh/users/keepuser /opt/keepuser-stray 2>/dev/null || true
+
+echo ""
+echo "=== Phase 2e: dry-run makes no changes ==="
+# create a throwaway user, run dry-run, verify user still exists
+useradd -m -s /bin/bash -u 1900 dryuser 2>/dev/null || \
+    (groupadd -g 1900 dryuser && useradd -m -s /bin/bash -u 1900 -g 1900 dryuser)
+echo "dryuser:100000:65536" >> /etc/subuid
+/opt/scripts/remove-user.sh --skip-orphan-scan dryuser > /dev/null 2>&1 || true
+id dryuser &>/dev/null && pass "dry-run: user still exists" || fail "dry-run: user was deleted"
+[[ -d /home/dryuser ]] && pass "dry-run: home dir still exists" || fail "dry-run: home dir was deleted"
+grep -q "^dryuser:" /etc/subuid && pass "dry-run: subuid intact" || fail "dry-run: subuid removed"
+# clean up
+userdel -r dryuser 2>/dev/null || true
+
+echo ""
+echo "=== Phase 2f: multiple subuid entries (head -1 fix) ==="
+# create user with multiple subuid/subgid entries to verify manifest doesn't corrupt
+useradd -m -s /bin/bash -u 1950 multiuser 2>/dev/null || \
+    (groupadd -g 1950 multiuser && useradd -m -s /bin/bash -u 1950 -g 1950 multiuser)
+# add two entries per file (simulates system-created + manual)
+echo "multiuser:165536:65536" >> /etc/subuid
+echo "multiuser:100000:65536" >> /etc/subuid
+echo "multiuser:165536:65536" >> /etc/subgid
+echo "multiuser:100000:65536" >> /etc/subgid
+/opt/scripts/remove-user.sh --force -y --skip-orphan-scan multiuser > /dev/null 2>&1
+# verify the manifest has a clean single-line subuid (not multiline corruption)
+MULTI_TARBALL=$(ls -t /var/backups/removed-users/multiuser_*.tar.gz 2>/dev/null | head -1)
+if [[ -n "$MULTI_TARBALL" ]]; then
+    MULTI_MPATH=$(tar tzf "$MULTI_TARBALL" 2>/dev/null | grep '\.manifest-' | head -1 || true)
+    if [[ -n "$MULTI_MPATH" ]]; then
+        tar xzf "$MULTI_TARBALL" -C /tmp "$MULTI_MPATH" 2>/dev/null
+        MULTI_M="/tmp/$MULTI_MPATH"
+        # subuid should be exactly one value (first entry), not multiline
+        SUBUID_VAL=$(grep "^subuid=" "$MULTI_M" | cut -d= -f2-)
+        # check it doesn't contain a newline (which would mean multiple entries leaked)
+        SUBUID_LINES=$(echo "$SUBUID_VAL" | wc -l)
+        [[ "$SUBUID_LINES" -eq 1 ]] && pass "multi-subuid: manifest has single subuid line" || fail "multi-subuid: manifest subuid corrupted ($SUBUID_LINES lines)"
+        # verify the home field is still correct (was the corruption victim before)
+        HOME_VAL=$(grep "^home=" "$MULTI_M" | cut -d= -f2-)
+        [[ "$HOME_VAL" == "/home/multiuser" ]] && pass "multi-subuid: home field intact" || fail "multi-subuid: home field corrupted (got: $HOME_VAL)"
+        rm -f "$MULTI_M"
+    else
+        fail "multi-subuid: no manifest in tarball"
+    fi
+else
+    fail "multi-subuid: no tarball created"
+fi
 
 echo ""
 echo "=== Phase 3: Restore user ==="
