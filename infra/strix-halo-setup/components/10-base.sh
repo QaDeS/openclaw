@@ -14,7 +14,7 @@ install_base() {
     fi
     if ! command -v mainline &> /dev/null; then
         run add-apt-repository ppa:cappelikan/ppa -y
-        run apt update && run apt install mainline -y
+        run apt update && run cached_apt_install mainline
     fi
     run mainline install ${KERNEL_VERSION} || log "Kernel ${KERNEL_VERSION} already installed, continuing."
 
@@ -46,7 +46,7 @@ PINEOF
     if dpkg -l rocminfo 2>/dev/null | grep -q '^ii' && ! dpkg -s rocminfo 2>/dev/null | grep -q "repo.radeon.com"; then
         run apt remove -y rocminfo
     fi
-    run apt install -y rocminfo
+    run cached_apt_install rocminfo
 
     # Link ROCm binaries into /usr/local/bin so they're always on PATH
     if [ "$DRY_RUN" = false ]; then
@@ -68,7 +68,7 @@ PINEOF
         log "ROCm ${ROCM_VERSION} already installed and driver loaded, skipping SDK install."
     else
         log "Installing ROCm ${ROCM_VERSION} SDK..."
-        run apt install -y rocm-hip-sdk rocm-smi-lib mesa-va-drivers mesa-vdpau-drivers
+        run cached_apt_install rocm-hip-sdk rocm-smi-lib mesa-va-drivers mesa-vdpau-drivers
         # Re-link after SDK install (adds hipcc, rocm-smi, etc.)
         if [ "$DRY_RUN" = false ]; then
             rocm_dir=$(find /opt -maxdepth 1 -name 'rocm-*' -type d 2>/dev/null | sort -V | tail -1)
@@ -109,7 +109,7 @@ deploy_base_config() {
 
     # Graphical desktop (HDMI auto-detected) + xrdp for headless remote access
     if [ "$DRY_RUN" = false ]; then
-        apt install -y xorg xserver-xorg-video-amdgpu xfce4 lightdm \
+        cached_apt_install xorg xserver-xorg-video-amdgpu xfce4 lightdm \
                        xrdp xvfb
         # Remove any forced driver config — let Xorg auto-detect hardware.
         # HDMI connected → amdgpu picked up automatically → lightdm serves desktop.

@@ -8,7 +8,7 @@ install_llamacpp() {
     ensure_user llamacpp
 
     # Build dependencies
-    run apt-get install -y cmake build-essential libvulkan-dev vulkan-tools
+    run cached_apt_install cmake build-essential libvulkan-dev vulkan-tools
 
     # Clone or update
     local repo_dir="/home/llamacpp/llama.cpp"

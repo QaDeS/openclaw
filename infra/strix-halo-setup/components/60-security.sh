@@ -45,6 +45,13 @@ install_hosting_stack() {
     # Rootless podman needs subuid/subgid ranges
     ensure_subuid hosting
 
+    # Pre-load cached container images (before quadlet pull)
+    if [ "$DRY_RUN" = false ]; then
+        cached_podman_ensure hosting "supabase/postgres:latest"
+        cached_podman_ensure hosting "wordpress:latest"
+        cached_podman_ensure hosting "mariadb:lts"
+    fi
+
     # Deploy quadlet + target files for rootless podman
     local quadlet_dir="/home/hosting/.config/containers/systemd"
     local systemd_dir="/home/hosting/.config/systemd/user"

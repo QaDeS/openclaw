@@ -4,6 +4,11 @@
 # component_description: LM Studio desktop app for the operator (use via ssh -X or RDP to browse & test models)
 
 install_lmstudio() {
+    if [[ -z "${SUDO_USER:-}" ]]; then
+        log_warn "SUDO_USER not set; skipping LM Studio (it requires the operator user)"
+        return 0
+    fi
+    
     log "Installing LM Studio for operator (${SUDO_USER})..."
     local user_home
     user_home=$(getent passwd "$SUDO_USER" | cut -d: -f6)

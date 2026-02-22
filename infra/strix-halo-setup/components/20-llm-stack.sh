@@ -16,7 +16,7 @@ install_openclaw_stack() {
         log "Installing Node.js 22..."
         if [ "$DRY_RUN" = false ]; then
             cached_curl_pipe "https://deb.nodesource.com/setup_22.x" bash -
-            apt install -y nodejs
+            cached_apt_install nodejs
         else
             run echo "curl … nodesource setup_22.x | bash && apt install nodejs"
         fi

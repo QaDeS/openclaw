@@ -43,7 +43,7 @@ harden_ssh() {
 
 setup_fail2ban() {
     log "Installing and configuring fail2ban..."
-    run apt install -y fail2ban
+    run cached_apt_install fail2ban
 
     if [ "$DRY_RUN" = false ]; then
         mkdir -p /etc/fail2ban/jail.d
@@ -97,7 +97,7 @@ setup_upnp_ssh() {
     fi
 
     log "Setting up UPnP SSH port forwarding (external port ${SSH_UPNP_PORT})..."
-    run apt install -y miniupnpc
+    run cached_apt_install miniupnpc
 
     # Deploy refresh script
     run cp "${INFRA_DIR}/scripts/upnp-ssh-refresh.sh" /usr/local/sbin/upnp-ssh-refresh

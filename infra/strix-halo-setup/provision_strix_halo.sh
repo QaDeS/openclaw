@@ -12,6 +12,8 @@ PROJECT_ROOT="$(cd "$INFRA_DIR/../.." && pwd)"
 KERNEL_VERSION="6.18.7"
 ROCM_VERSION="7.2"
 SHARED_MODEL_DIR="/models"
+FLAT_LLAMA_MODELS_DIR="/llama_models"
+COMFYUI_MODELS_DIR="/ComfyUI-models"
 LOCAL_LLM_URL="http://localhost:11234/v1"
 ACE_STEP_MODEL_URL="https://huggingface.co/Linaqruf/ace-step-1.5-turbo-aio/resolve/main/ace_step_1.5_turbo_aio.safetensors"
 HSA_OVERRIDE="11.5.1"
@@ -61,6 +63,17 @@ if [ "$NO_CACHE" = true ]; then
 fi
 
 export CACHE_DIR
+export SHARED_MODEL_DIR
+export FLAT_LLAMA_MODELS_DIR
+export COMFYUI_MODELS_DIR
+
+# Share pip/uv caches via CACHE_DIR so all users read/write the same pool
+if [ -n "${CACHE_DIR:-}" ]; then
+    export UV_CACHE_DIR="${CACHE_DIR}/uv"
+    export PIP_CACHE_DIR="${CACHE_DIR}/pip"
+    mkdir -p "$UV_CACHE_DIR" "$PIP_CACHE_DIR"
+    chmod 777 "$UV_CACHE_DIR" "$PIP_CACHE_DIR"
+fi
 
 # Source cache-aware download helpers.
 # Also publish a world-readable copy so that sudo -u <svc-user> subshells can
@@ -388,6 +401,10 @@ do_undo() {
 # --- Helpers ---
 ensure_user() {
     local user=$1
+    # Ensure required groups exist before adding user
+    if ! getent group ai-users &>/dev/null; then
+        groupadd -f ai-users
+    fi
     if ! id "$user" &>/dev/null; then
         run useradd -m -s /bin/bash -G ai-users,render,video "$user"
     fi
@@ -750,7 +767,7 @@ Access URLs (once provisioned, use ${host} from your laptop):
   WordPress          http://${host}:8080
 
 Upload models to ComfyUI:
-  rsync -avP -e ssh --rsync-path="sudo -u comfyui rsync" <file> $(logname)@${host}:/home/comfyui/ComfyUI/models/<subdir>/
+  rsync -avP -e ssh --rsync-path="sudo -u comfyui /usr/local/bin/comfyui-rsync-wrapper" <file> $(logname)@${host}:/home/comfyui/ComfyUI/models/<subdir>/
 
 Service management:
   System services (llamacpp, comfyui, ace-step, cisco-defense, sync-llama-models):
@@ -887,7 +904,7 @@ print_urls() {
                 ;;
             COMFYUI)
                 echo -e "  ${GREEN}ComfyUI${NC}            http://${host}:8188"
-                echo -e "  ${GREEN}Upload models${NC}      rsync -avP -e ssh --rsync-path=\"sudo -u comfyui rsync\" <file> ${host}:/home/comfyui/ComfyUI/models/<subdir>/"
+                echo -e "  ${GREEN}Upload models${NC}      rsync -avP -e ssh --rsync-path=\"sudo -u comfyui /usr/local/bin/comfyui-rsync-wrapper\" <file> ${host}:/home/comfyui/ComfyUI/models/<subdir>/"
                 any=true
                 ;;
             ACE_STEP)

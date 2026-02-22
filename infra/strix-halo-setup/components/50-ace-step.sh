@@ -50,11 +50,11 @@ install_ace_step() {
             local pip_cache_args
             pip_cache_args=$(cached_pip_index_args torch-rocm-gfx1151)
             if [ -n "$pip_cache_args" ]; then
-                sudo -u comfyui "$PIP" install --pre \
+                sudo -u comfyui PIP_CACHE_DIR="${PIP_CACHE_DIR:-}" "$PIP" install --pre \
                     torch torchvision torchaudio \
                     $pip_cache_args
             else
-                sudo -u comfyui "$PIP" install --pre \
+                sudo -u comfyui PIP_CACHE_DIR="${PIP_CACHE_DIR:-}" "$PIP" install --pre \
                     torch torchvision torchaudio \
                     --index-url "${ACE_STEP_TORCH_INDEX}"
             fi
@@ -63,14 +63,14 @@ install_ace_step() {
             #    Use requirements-rocm-linux.txt if present (ships with ACE-Step 1.5),
             #    otherwise fall back to the standard requirements minus torch.
             if [ -f "${ACE_STEP_HOME}/requirements-rocm-linux.txt" ]; then
-                sudo -u comfyui "$PIP" install -r "${ACE_STEP_HOME}/requirements-rocm-linux.txt"
+                sudo -u comfyui PIP_CACHE_DIR="${PIP_CACHE_DIR:-}" "$PIP" install -r "${ACE_STEP_HOME}/requirements-rocm-linux.txt"
                 # Guard against diffusers 0.33.0+ logger bug in torchao_quantizer.py
-                sudo -u comfyui "$PIP" install "diffusers>=0.31.0,<0.33.0"
+                sudo -u comfyui PIP_CACHE_DIR="${PIP_CACHE_DIR:-}" "$PIP" install "diffusers>=0.31.0,<0.33.0"
             else
                 log "No requirements-rocm-linux.txt found, installing core deps manually..."
                 # Pin diffusers<0.33.0: 0.33.0+ has a NameError bug in
                 # torchao_quantizer.py (logger undefined).
-                sudo -u comfyui "$PIP" install \
+                sudo -u comfyui PIP_CACHE_DIR="${PIP_CACHE_DIR:-}" "$PIP" install \
                     "transformers>=4.51.0,<4.58.0" \
                     "diffusers>=0.31.0,<0.33.0" \
                     "accelerate>=1.12.0" \
@@ -90,12 +90,12 @@ install_ace_step() {
         #    that — torch/triton/transformers are already installed from the
         #    ROCm nightly index and AMD ships its own flash attention kernels.
         if [ -d "${ACE_STEP_HOME}/acestep/third_parts/nano-vllm" ]; then
-            sudo -u comfyui "$PIP" install -e "${ACE_STEP_HOME}/acestep/third_parts/nano-vllm" --no-deps
+            sudo -u comfyui PIP_CACHE_DIR="${PIP_CACHE_DIR:-}" "$PIP" install -e "${ACE_STEP_HOME}/acestep/third_parts/nano-vllm" --no-deps
         fi
 
         # 6. Install ACE-Step itself with --no-deps to prevent pip from
         #    re-resolving torch (the CUDA→ROCm overwrite problem)
-        sudo -u comfyui "$PIP" install -e "${ACE_STEP_HOME}" --no-deps
+        sudo -u comfyui PIP_CACHE_DIR="${PIP_CACHE_DIR:-}" "$PIP" install -e "${ACE_STEP_HOME}" --no-deps
 
         # 7. Verify ROCm torch is still in place
         _verify_rocm_torch "$PYTHON"
@@ -122,8 +122,8 @@ _verify_rocm_torch() {
         warn "ROCm PyTorch verification FAILED — torch.version.hip is empty."
         warn "Something reinstalled CUDA torch. Forcing ROCm reinstall..."
         local PIP="${ACE_STEP_VENV}/bin/pip"
-        sudo -u comfyui "$PIP" uninstall torch torchvision torchaudio -y
-        sudo -u comfyui "$PIP" install --pre \
+        sudo -u comfyui PIP_CACHE_DIR="${PIP_CACHE_DIR:-}" "$PIP" uninstall torch torchvision torchaudio -y
+        sudo -u comfyui PIP_CACHE_DIR="${PIP_CACHE_DIR:-}" "$PIP" install --pre \
             torch torchvision torchaudio \
             --index-url "${ACE_STEP_TORCH_INDEX}"
         # Re-verify

@@ -40,6 +40,11 @@ install_ddns() {
     # Rootless podman needs subuid/subgid ranges
     ensure_subuid ddns
 
+    # Pre-load cached container image
+    if [ "$DRY_RUN" = false ]; then
+        cached_podman_ensure ddns "linuxshots/namecheap-ddns"
+    fi
+
     # Create secrets directory
     run mkdir -p /home/ddns/.secrets
     run chmod 700 /home/ddns/.secrets

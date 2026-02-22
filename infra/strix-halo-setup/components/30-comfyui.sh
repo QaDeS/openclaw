@@ -47,29 +47,43 @@ install_comfyui() {
             local pip_cache_args
             pip_cache_args=$(cached_pip_index_args torch-rocm-gfx1151)
             if [ -n "$pip_cache_args" ]; then
-                sudo -u comfyui "$UV" --no-config pip install \
+                sudo -u comfyui UV_CACHE_DIR="${UV_CACHE_DIR:-}" "$UV" --no-config pip install \
                     --python "${venv_dir}/bin/python" \
                     --pre torch torchvision torchaudio \
                     $pip_cache_args
             else
-                sudo -u comfyui "$UV" --no-config pip install \
+                sudo -u comfyui UV_CACHE_DIR="${UV_CACHE_DIR:-}" "$UV" --no-config pip install \
                     --python "${venv_dir}/bin/python" \
                     --pre torch torchvision torchaudio \
                     --index-url https://rocm.nightlies.amd.com/v2/gfx1151/
             fi
-            sudo -u comfyui "$UV" --no-config pip install \
+            sudo -u comfyui UV_CACHE_DIR="${UV_CACHE_DIR:-}" "$UV" --no-config pip install \
                 --python "${venv_dir}/bin/python" \
                 -r "${repo_dir}/requirements.txt"
         fi
     fi
     # Allow the provisioning user to rsync files as comfyui (model uploads)
+    # Uses a wrapper script to restrict destinations to ComfyUI models dir only
     if [ -n "$SUDO_USER" ]; then
+        run cp ${INFRA_DIR}/scripts/comfyui-rsync-wrapper.sh /usr/local/bin/comfyui-rsync-wrapper
+        run chmod 755 /usr/local/bin/comfyui-rsync-wrapper
         run tee /etc/sudoers.d/comfyui-upload > /dev/null <<EOF
-${SUDO_USER} ALL=(comfyui) NOPASSWD: /usr/bin/rsync
+${SUDO_USER} ALL=(comfyui) NOPASSWD: /usr/local/bin/comfyui-rsync-wrapper
 EOF
         run chmod 0440 /etc/sudoers.d/comfyui-upload
         track_file_create /etc/sudoers.d/comfyui-upload
+        track_file_create /usr/local/bin/comfyui-rsync-wrapper
     fi
+
+    # Ensure ComfyUI shared models directory exists and link it
+    if [ "$DRY_RUN" = false ]; then
+        mkdir -p "${COMFYUI_MODELS_DIR}"
+        chown :ai-users "${COMFYUI_MODELS_DIR}"
+        chmod 2775 "${COMFYUI_MODELS_DIR}"
+        sudo -u comfyui ln -sfn "${COMFYUI_MODELS_DIR}" "${repo_dir}/models"
+        log "Linked ${repo_dir}/models → ${COMFYUI_MODELS_DIR}"
+    fi
+    track_symlink "${repo_dir}/models" "${COMFYUI_MODELS_DIR}"
 
     run cp ${INFRA_DIR}/systemd/comfyui.service /etc/systemd/system/comfyui.service
     track_file_create /etc/systemd/system/comfyui.service
@@ -97,7 +111,7 @@ install_comfyui_manager() {
 
         # Install Manager dependencies
         if [ -f "${manager_dir}/requirements.txt" ]; then
-            sudo -u comfyui "$UV" --no-config pip install \
+            sudo -u comfyui UV_CACHE_DIR="${UV_CACHE_DIR:-}" "$UV" --no-config pip install \
                 --python "$VENV_PYTHON" \
                 -r "${manager_dir}/requirements.txt"
         fi

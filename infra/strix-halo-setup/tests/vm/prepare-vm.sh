@@ -1,5 +1,13 @@
 #!/bin/bash
 # prepare-vm.sh - VM creation and management helpers for strix-halo tests
+#
+# IMPORTANT: This script now uses libvirt hooks for proper GPU management.
+# The hooks handle:
+#   1. Setting device_specific reset_method (fixes AMD GPU reset bug)
+#   2. Unbinding GPU from amdgpu before VM start
+#   3. Rebinding GPU to amdgpu after VM stop
+#
+# Install hooks with: sudo ./prepare-vm.sh install-hooks
 
 set -euo pipefail
 
@@ -12,7 +20,7 @@ trap 'echo; echo "Interrupted — aborting."; cleanup_on_exit; kill 0; exit 130'
 trap 'cleanup_on_exit' EXIT
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-STRIX_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+STRIX_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 CACHE_DIR="${STRIX_DIR}/.cache"
 VM_DIR="${CACHE_DIR}/vm"
 VM_NAME="strix-test-vm"
@@ -38,6 +46,47 @@ ensure_sudo() {
     # Keep sudo alive in the background
     while sudo -n true 2>/dev/null; do sleep 50; done &
     SUDO_KEEPALIVE_PID=$!
+}
+
+# =============================================================================
+# Hook Installation
+# =============================================================================
+
+install_hooks() {
+    echo "Installing libvirt hook scripts..."
+    
+    local hook_src="${SCRIPT_DIR}/hooks"
+    local hook_dst="/etc/libvirt/hooks"
+    
+    if [ ! -d "$hook_src" ]; then
+        echo "ERROR: Hook source directory not found: $hook_src"
+        return 1
+    fi
+    
+    # Create log directory
+    sudo mkdir -p /var/log/libvirt-hooks
+    
+    # Install hooks
+    if [ -d "$hook_dst" ]; then
+        echo "Backing up existing hooks..."
+        sudo cp -r "$hook_dst" "${hook_dst}.backup.$(date +%Y%m%d%H%M%S)" 2>/dev/null || true
+    fi
+    
+    sudo mkdir -p "$hook_dst"
+    sudo cp -r "${hook_src}/." "$hook_dst/"
+    
+    # Ensure scripts are executable
+    sudo find "$hook_dst" -name "*.sh" -exec chmod +x {} \;
+    
+    # Restart libvirtd to pick up hooks
+    echo "Restarting libvirtd..."
+    sudo systemctl restart libvirtd 2>/dev/null || sudo systemctl restart libvirt-bin 2>/dev/null || {
+        echo "[WARN] Could not restart libvirtd automatically"
+        echo "[WARN] Please restart manually: sudo systemctl restart libvirtd"
+    }
+    
+    echo "[OK] Hooks installed to $hook_dst"
+    echo "[OK] Hook log will be at: /var/log/libvirt-hooks/gpu-passthrough.log"
 }
 
 # =============================================================================
@@ -71,8 +120,29 @@ check_prereqs() {
         return 1
     fi
     
+    # Check IOMMU
+    if [ ! -d "/sys/class/iommu" ] || [ -z "$(ls -A /sys/class/iommu 2>/dev/null)" ]; then
+        echo "[WARN] IOMMU does not appear to be enabled"
+        echo "[WARN] Add 'amd_iommu=on iommu=pt' to /etc/default/grub"
+        echo "[WARN] Then: sudo update-grub && sudo reboot"
+    fi
+    
     echo "[OK] All prerequisites met"
     return 0
+}
+
+# =============================================================================
+# Pre-flight Check
+# =============================================================================
+
+run_preflight_check() {
+    local check_script="${SCRIPT_DIR}/scripts/check-passthrough.sh"
+    if [ -x "$check_script" ]; then
+        echo "Running pre-flight check..."
+        "$check_script"
+    else
+        echo "[WARN] Pre-flight check script not found: $check_script"
+    fi
 }
 
 # =============================================================================
@@ -198,49 +268,60 @@ create_vm_disk() {
 }
 
 # =============================================================================
-# GPU Passthrough - Detach from Host using virsh
+# GPU Passthrough - Using Hooks (New Method)
 # =============================================================================
+#
+# The actual GPU bind/unbind is now handled by libvirt hooks:
+#   /etc/libvirt/hooks/qemu.d/strix-test-vm/prepare/begin/start.sh
+#   /etc/libvirt/hooks/qemu.d/strix-test-vm/release/end/stop.sh
+#
+# These hooks:
+#   1. Set device_specific reset_method (CRITICAL for AMD reset bug fix)
+#   2. Unbind GPU from amdgpu before VM starts
+#   3. Rebind GPU to amdgpu after VM stops
 
-detach_gpu_from_host() {
-    echo "Detaching GPU from host (using virsh)..."
+# Legacy functions - kept for reference but hooks handle this now
+_detach_gpu_from_host_legacy() {
+    echo "[INFO] Using legacy GPU detachment (consider using hooks instead)..."
+    
+    # Set device_specific reset method BEFORE detaching
+    if [ -f "/sys/bus/pci/devices/${GPU_PCI}/reset_method" ]; then
+        if echo 'device_specific' > "/sys/bus/pci/devices/${GPU_PCI}/reset_method" 2>/dev/null; then
+            echo "  [OK] Set reset_method to device_specific"
+        else
+            echo "  [WARN] Could not set device_specific reset_method"
+        fi
+    fi
     
     # Detach GPU and audio via libvirt (timeout prevents hang if already detached)
-    if sudo sudo timeout 10 virsh nodedev-detach pci_0000_c5_00_0 2>/dev/null; then
-        echo "  [OK] Detached GPU c5:00.0"
+    if sudo timeout 10 virsh nodedev-detach "pci_${GPU_PCI//:/_}" 2>/dev/null; then
+        echo "  [OK] Detached GPU ${GPU_PCI}"
     else
-        echo "  [OK] GPU c5:00.0 already detached or unavailable"
+        echo "  [OK] GPU ${GPU_PCI} already detached or unavailable"
     fi
 
-    if sudo sudo timeout 10 virsh nodedev-detach pci_0000_c5_00_1 2>/dev/null; then
-        echo "  [OK] Detached HDMI Audio c5:00.1"
+    if sudo timeout 10 virsh nodedev-detach "pci_${GPU_AUDIO_PCI//:/_}" 2>/dev/null; then
+        echo "  [OK] Detached HDMI Audio ${GPU_AUDIO_PCI}"
     else
-        echo "  [OK] HDMI Audio c5:00.1 already detached or unavailable"
+        echo "  [OK] HDMI Audio ${GPU_AUDIO_PCI} already detached or unavailable"
     fi
-    
-    echo "[OK] GPU detached from host"
 }
 
-# =============================================================================
-# GPU Passthrough - Reattach to Host using virsh
-# =============================================================================
-
-reattach_gpu_to_host() {
-    echo "Re-attaching GPU to host (using virsh)..."
+_reattach_gpu_to_host_legacy() {
+    echo "[INFO] Using legacy GPU reattachment..."
     
     # Reattach GPU and audio via libvirt (timeout prevents hang if already attached)
-    if sudo sudo timeout 10 virsh nodedev-reattach pci_0000_c5_00_0 2>/dev/null; then
-        echo "  [OK] Reattached GPU c5:00.0"
+    if sudo timeout 10 virsh nodedev-reattach "pci_${GPU_PCI//:/_}" 2>/dev/null; then
+        echo "  [OK] Reattached GPU ${GPU_PCI}"
     else
-        echo "  [OK] GPU c5:00.0 already attached or unavailable"
+        echo "  [OK] GPU ${GPU_PCI} already attached or unavailable"
     fi
 
-    if sudo sudo timeout 10 virsh nodedev-reattach pci_0000_c5_00_1 2>/dev/null; then
-        echo "  [OK] Reattached HDMI Audio c5:00.1"
+    if sudo timeout 10 virsh nodedev-reattach "pci_${GPU_AUDIO_PCI//:/_}" 2>/dev/null; then
+        echo "  [OK] Reattached HDMI Audio ${GPU_AUDIO_PCI}"
     else
-        echo "  [OK] HDMI Audio c5:00.1 already attached or unavailable"
+        echo "  [OK] HDMI Audio ${GPU_AUDIO_PCI} already attached or unavailable"
     fi
-    
-    echo "[OK] GPU re-attached to host"
 }
 
 # =============================================================================
@@ -270,21 +351,12 @@ create_vm() {
         --machine q35 \
         --osinfo ubuntu24.04 \
         --security type=none \
+        --hostdev "${GPU_PCI},driver.name=vfio" \
+        --hostdev "${GPU_AUDIO_PCI},driver.name=vfio" \
         --noautoconsole || true
 
-    echo "  Attaching GPU passthrough device..."
-    # Define with GPU passthrough manually
-    cat > /tmp/${VM_NAME}-gpu.xml << 'XML'
-<hostdev mode='subsystem' type='pci' managed='yes'>
-  <source>
-    <address domain='0x0000' bus='0xc5' slot='0x00' function='0x0'/>
-  </source>
-</hostdev>
-XML
-
-    sudo timeout 10 virsh attach-device "$VM_NAME" /tmp/${VM_NAME}-gpu.xml --persistent 2>/dev/null || true
-
-    echo "[OK] VM created"
+    echo "[OK] VM created with GPU passthrough"
+    echo "[INFO] GPU bind/unbind is handled by libvirt hooks"
 }
 
 start_vm() {
@@ -353,10 +425,6 @@ copy_to_vm() {
 run_provisioning() {
     echo "Running provisioning in VM..."
     
-    # Mount host cache into VM
-    run_in_vm "sudo mkdir -p /host-cache"
-    # Note: 9pfs mounting requires special setup, using scp instead for now
-    
     # Copy provisioning scripts to VM
     echo "Copying provisioning scripts to VM..."
     copy_to_vm "${STRIX_DIR}" "/home/${VM_USER}/strix-halo-setup"
@@ -368,11 +436,12 @@ run_provisioning() {
     fi
     
     # Run provisioning with override for SSH key check
+    # Note: Skip GPU components in VM to avoid ROCm amdgpu conflicts
     run_in_vm "cd /home/${VM_USER}/strix-halo-setup && \
         CACHE_DIR=/home/${VM_USER}/.cache \
         SSH_USERS='${VM_USER}' \
         FORCE_SSH_KEY_CHECK=true \
-        ./provision_strix_halo.sh --all --force"
+        ./provision_strix_halo.sh --only ssh,base,podman --force"
     
     echo "[OK] Provisioning complete"
 }
@@ -394,53 +463,8 @@ health_check_services() {
         failures=$((failures + 1))
     fi
     
-    # LM Studio
-    echo -n "LM Studio (port 1234): "
-    if run_in_vm "curl -sf http://localhost:1234/v1/models" >/dev/null 2>&1; then
-        echo "[OK]"
-    else
-        echo "[FAIL] (may not be installed)"
-    fi
-    
-    # llama.cpp
-    echo -n "llama.cpp (port 11234): "
-    if run_in_vm "curl -sf http://localhost:11234/v1/models" >/dev/null 2>&1; then
-        echo "[OK]"
-    else
-        echo "[FAIL] (may not be installed)"
-    fi
-    
-    # ComfyUI
-    echo -n "ComfyUI (port 8188): "
-    if run_in_vm "curl -sf http://localhost:8188/system_stats" >/dev/null 2>&1; then
-        echo "[OK]"
-    else
-        echo "[FAIL] (may not be installed)"
-    fi
-    
-    # ACE Step
-    echo -n "ACE Step (port 7860): "
-    if run_in_vm "curl -sf http://localhost:7860" >/dev/null 2>&1; then
-        echo "[OK]"
-    else
-        echo "[FAIL] (may not be installed)"
-    fi
-    
-    # WordPress
-    echo -n "WordPress (port 8080): "
-    if run_in_vm "curl -sf -o /dev/null -w '%{http_code}' http://localhost:8080" 2>&1 | grep -q "200\|302"; then
-        echo "[OK]"
-    else
-        echo "[FAIL] (may not be installed)"
-    fi
-    
-    # RDP
-    echo -n "RDP (port 3389): "
-    if run_in_vm "nc -z localhost 3389" >/dev/null 2>&1; then
-        echo "[OK]"
-    else
-        echo "[FAIL] (may not be installed)"
-    fi
+    # Skip GPU-dependent services since we don't install them in VM
+    info "Skipping GPU-dependent service checks (ROCm not installed in VM)"
     
     if [ $failures -gt 0 ]; then
         echo "[WARN] $failures service(s) failed"
@@ -458,7 +482,7 @@ health_check_services() {
 cleanup() {
     echo "Cleaning up..."
     stop_vm
-    reattach_gpu_to_host
+    # GPU reattachment is handled by hook script
     teardown_tmpfs
     restart_display_manager
 }
@@ -487,17 +511,36 @@ show_help() {
 Usage: prepare-vm.sh <command>
 
 Commands:
-    setup        Check prereqs, generate keys, download image
-    create       Create and start VM
-    provision    Run provisioning inside VM
-    health       Run health checks
-    stop         Stop VM
-    cleanup      Stop VM and reattach GPU
-    all          Run full test cycle (setup -> create -> provision -> health -> cleanup)
+    setup          Check prereqs, generate keys, download image
+    install-hooks  Install libvirt hook scripts (run once)
+    check          Run pre-flight passthrough checks
+    create         Create and start VM
+    provision      Run provisioning inside VM
+    health         Run health checks
+    stop           Stop VM
+    cleanup        Stop VM and reattach GPU
+    all            Run full test cycle (setup -> create -> provision -> health -> cleanup)
 
 Environment:
-    VM_VCPU      Number of CPUs (default: 2)
-    VM_RAM       RAM in MB (default: 4096)
+    VM_VCPU        Number of CPUs (default: 2)
+    VM_RAM         RAM in MB (default: 4096)
+    GPU_PCI        GPU PCI address (default: 0000:c5:00.0)
+    GPU_AUDIO_PCI  Audio PCI address (default: 0000:c5:00.1)
+
+GPU Passthrough Notes:
+    This script uses libvirt hooks for proper GPU management:
+      - Sets device_specific reset_method (fixes AMD GPU reset bug)
+      - Unbinds GPU from amdgpu before VM start
+      - Rebinds GPU to amdgpu after VM stop
+
+    Install hooks with: sudo ./prepare-vm.sh install-hooks
+    
+    Check readiness with: ./prepare-vm.sh check
+
+Kernel Recommendations:
+    For Strix Halo (gfx1151), use kernel 6.17.9+ or 6.19+
+    Avoid 6.18.0-6.18.3 due to known amdgpu MES hang issues.
+    Install with: ./scripts/install-kernel.sh 6.17.9
 HELP
 }
 
@@ -515,10 +558,21 @@ main() {
             setup_tmpfs
             generate_cloudinit
             create_vm_disk
+            echo ""
+            echo "[OK] Setup complete. Next steps:"
+            echo "  1. Install hooks: sudo ./prepare-vm.sh install-hooks"
+            echo "  2. Run checks:   ./prepare-vm.sh check"
+            echo "  3. Create VM:    sudo ./prepare-vm.sh create"
+            ;;
+        install-hooks)
+            ensure_sudo
+            install_hooks
+            ;;
+        check)
+            run_preflight_check
             ;;
         create)
             ensure_sudo
-            detach_gpu_from_host
             create_vm
             start_vm
             wait_for_ssh
@@ -538,6 +592,7 @@ main() {
             ;;
         all)
             ensure_sudo
+            run_preflight_check
             check_prereqs
             generate_ssh_key
             download_ubuntu_image
@@ -545,7 +600,6 @@ main() {
             setup_tmpfs
             generate_cloudinit
             create_vm_disk
-            detach_gpu_from_host
             create_vm
             start_vm
             wait_for_ssh

@@ -5,7 +5,7 @@
 
 install_podman() {
     log "Installing Podman..."
-    run apt install -y podman
+    run cached_apt_install podman
     undo_note "Package podman not auto-removed on undo"
 }
 

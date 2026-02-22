@@ -118,6 +118,87 @@ cached_git_clone() {
     fi
 }
 
+# cached_apt_install PKG...
+# Wraps apt install with cache population/restore via CACHE_DIR/apt/.
+# On cache hit: copies matching .deb files into /var/cache/apt/archives/ first
+# so apt can skip downloading them.  After install, copies any newly downloaded
+# .debs back into the cache for next time.
+# When CACHE_DIR is empty: plain apt install -y.
+cached_apt_install() {
+    if [ -z "${CACHE_DIR:-}" ]; then
+        apt install -y "$@"
+        return
+    fi
+
+    local apt_cache="$CACHE_DIR/apt"
+    $_CACHE_MKDIR -p "$apt_cache"
+
+    # Pre-seed: copy cached debs into the system apt cache
+    if [ -d "$apt_cache" ] && [ -n "$(ls -A "$apt_cache"/*.deb 2>/dev/null)" ]; then
+        log "Restoring cached apt debs from $apt_cache"
+        $_CACHE_CP "$apt_cache"/*.deb /var/cache/apt/archives/ 2>/dev/null || true
+    fi
+
+    apt install -y "$@"
+
+    # Post-seed: copy newly downloaded debs back to cache
+    for deb in /var/cache/apt/archives/*.deb; do
+        [ -f "$deb" ] || continue
+        local base
+        base=$(basename "$deb")
+        if [ ! -f "$apt_cache/$base" ]; then
+            $_CACHE_CP "$deb" "$apt_cache/$base"
+        fi
+    done
+}
+
+# cached_podman_ensure USER IMAGE
+# Pre-loads a container image from CACHE_DIR/podman/ if available.
+# The archive filename is derived from the image name (slashes → underscores).
+# Skips if the image is already in the user's local store.
+# When CACHE_DIR is empty: no-op (quadlets pull on first start).
+cached_podman_ensure() {
+    local user="$1"
+    local image="$2"
+
+    if [ -z "${CACHE_DIR:-}" ]; then
+        return
+    fi
+
+    local safe_name="${image//\//_}"
+    safe_name="${safe_name//:/_}"
+    local archive="$CACHE_DIR/podman/${safe_name}.tar"
+
+    if [ ! -f "$archive" ]; then
+        return
+    fi
+
+    local uid
+    uid=$(id -u "$user")
+    local rtdir="/run/user/${uid}"
+
+    # Check if image already exists in the user's store
+    if sudo -u "$user" XDG_RUNTIME_DIR="$rtdir" podman image exists "$image" 2>/dev/null; then
+        log "Podman image already present for ${user}: ${image}"
+        return
+    fi
+
+    log "Loading cached podman image for ${user}: ${archive}"
+    sudo -u "$user" XDG_RUNTIME_DIR="$rtdir" podman load -i "$archive"
+}
+
+# cached_env_for_pip
+# Outputs env var assignments for UV_CACHE_DIR and PIP_CACHE_DIR when CACHE_DIR
+# is set.  Intended for use in sudo -u commands:
+#   eval "$(cached_env_for_pip)" sudo -u user pip install ...
+# When CACHE_DIR is empty: outputs nothing.
+cached_env_for_pip() {
+    if [ -z "${CACHE_DIR:-}" ]; then
+        return
+    fi
+    echo "UV_CACHE_DIR=\"${CACHE_DIR}/uv\" PIP_CACHE_DIR=\"${CACHE_DIR}/pip\""
+}
+
 # cached_pip_index_args SUBDIR
 # Returns extra pip flags when a local wheel cache exists.
 # When cache hit: outputs --find-links DIR --no-index
