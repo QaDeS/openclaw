@@ -52,6 +52,7 @@ export type BuiltInAuthChoice =
   | "modelstudio-api-key"
   | "custom-api-key"
   | "lmstudio"
+  | "local-api"
   | "skip";
 export type AuthChoice = BuiltInAuthChoice | (string & {});
 

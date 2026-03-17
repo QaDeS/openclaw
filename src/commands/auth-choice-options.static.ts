@@ -44,6 +44,14 @@ export const CORE_AUTH_CHOICE_OPTIONS: ReadonlyArray<AuthChoiceOption> = [
     groupHint: "LM Studio",
   },
   {
+    value: "local-api",
+    label: "Local API",
+    hint: "Connect to any local OpenAI-compatible server",
+    groupId: "local",
+    groupLabel: "Local",
+    groupHint: "Local API server",
+  },
+  {
     value: "custom-api-key",
     label: "Custom Provider",
     hint: "Any OpenAI or Anthropic compatible endpoint",

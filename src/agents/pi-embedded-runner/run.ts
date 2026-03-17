@@ -658,6 +658,7 @@ export async function runEmbeddedPiAgent(
           // Allow providers that don't require API keys (aws-sdk chain, local providers)
           const isLocalProvider =
             runtimeModel.provider === "lmstudio" ||
+            runtimeModel.provider === "local-api" ||
             runtimeModel.provider === "ollama" ||
             runtimeModel.baseUrl?.startsWith("http://localhost") ||
             runtimeModel.baseUrl?.startsWith("http://127.0.0.1");

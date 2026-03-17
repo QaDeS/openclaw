@@ -8,6 +8,7 @@ const CORE_PROVIDER_AUTH_ENV_VAR_CANDIDATES = {
   cerebras: ["CEREBRAS_API_KEY"],
   litellm: ["LITELLM_API_KEY"],
   lmstudio: ["LM_STUDIO_TOKEN", "LMSTUDIO_API_KEY"],
+  "local-api": ["LM_STUDIO_TOKEN", "LMSTUDIO_API_KEY", "LOCAL_API_KEY"],
 } as const;
 
 const CORE_PROVIDER_SETUP_ENV_VAR_OVERRIDES = {

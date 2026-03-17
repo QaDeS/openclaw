@@ -1,7 +1,7 @@
 import { type OpenClawConfig, loadConfig } from "../config/config.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import { resolveOpenClawAgentDir } from "./agent-paths.js";
-import { LmStudioDiscoverySource } from "./lmstudio-discovery.js";
+import { LocalApiDiscoverySource } from "./local-api-discovery.js";
 import { ensureOpenClawModelsJson } from "./models-config.js";
 
 const log = createSubsystemLogger("model-catalog");
@@ -236,14 +236,14 @@ export async function loadModelCatalog(params?: {
         }
       }
 
-      // LM Studio local model discovery
+      // Local API model discovery (LM Studio, etc.)
       try {
-        const lmStudioSource = new LmStudioDiscoverySource();
-        const lmStudioModels = await lmStudioSource.discover({
+        const localApiSource = new LocalApiDiscoverySource();
+        const localApiModels = await localApiSource.discover({
           config: cfg,
           env: process.env,
         });
-        for (const entry of lmStudioModels) {
+        for (const entry of localApiModels) {
           const id = String(entry?.id ?? "").trim();
           if (!id) continue;
           const provider = String(entry?.provider ?? "").trim();
@@ -259,7 +259,7 @@ export async function loadModelCatalog(params?: {
           });
         }
       } catch (e) {
-        log.warn(`LM Studio discovery failed: ${String(e)}`);
+        log.warn(`Local API discovery failed: ${String(e)}`);
       }
 
       if (models.length === 0) {

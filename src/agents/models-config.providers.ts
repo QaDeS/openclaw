@@ -9,7 +9,7 @@ import { isRecord } from "../utils.js";
 import { normalizeOptionalSecretInput } from "../utils/normalize-secret-input.js";
 import { ensureAuthProfileStore, listProfilesForProvider } from "./auth-profiles.js";
 import { discoverBedrockModels } from "./bedrock-discovery.js";
-import { resolveImplicitLmStudioProvider } from "./lmstudio.js";
+import { resolveImplicitLocalApiProvider } from "./local-api-provider.js";
 import { normalizeGoogleModelId } from "./model-id-normalization.js";
 import { resolveOllamaApiBase } from "./models-config.providers.discovery.js";
 export { buildKimiCodingProvider } from "../../extensions/kimi-coding/provider-catalog.js";
@@ -789,20 +789,20 @@ export async function resolveImplicitProviders(
     resolveProviderAuth,
   };
 
-  // LM Studio provider (local API or file mode)
+  // Local API provider (LM Studio, Ollama, etc.)
   try {
     const config = params.config;
     if (config) {
-      const lmstudioProvider = await resolveImplicitLmStudioProvider({
+      const localApiProvider = await resolveImplicitLocalApiProvider({
         config,
         env,
       });
-      if (lmstudioProvider) {
-        providers["lmstudio"] = lmstudioProvider;
+      if (localApiProvider) {
+        providers["local-api"] = localApiProvider;
       }
     }
   } catch {
-    // LM Studio resolution failed, skip
+    // Local API resolution failed, skip
   }
 
   mergeImplicitProviderSet(providers, await resolvePluginImplicitProviders(context, "simple"));
