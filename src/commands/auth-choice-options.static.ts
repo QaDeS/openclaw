@@ -36,6 +36,14 @@ export const CORE_AUTH_CHOICE_OPTIONS: ReadonlyArray<AuthChoiceOption> = [
     groupHint: "Unified LLM gateway (100+ providers)",
   },
   {
+    value: "lmstudio",
+    label: "LM Studio",
+    hint: "Connect to local LM Studio server",
+    groupId: "local",
+    groupLabel: "Local",
+    groupHint: "LM Studio",
+  },
+  {
     value: "custom-api-key",
     label: "Custom Provider",
     hint: "Any OpenAI or Anthropic compatible endpoint",

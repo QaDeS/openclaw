@@ -189,6 +189,14 @@ function resolveSyntheticLocalProviderAuth(params: {
     };
   }
 
+  if (normalizedProvider === "lmstudio") {
+    return {
+      apiKey: OLLAMA_LOCAL_AUTH_MARKER,
+      source: "models.providers.lmstudio (synthetic local key)",
+      mode: "api-key",
+    };
+  }
+
   const authOverride = resolveProviderAuthOverride(params.cfg, params.provider);
   if (authOverride && authOverride !== "api-key") {
     return null;
